@@ -1,0 +1,36 @@
+# Python / PyCharm / VS Code
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+venv/
+env/
+.venv/
+
+# IDE & Editor Configurations
+.vs/
+.vscode/
+.idea/
+
+# Database files
+*.db
+*.sqlite3
+*.sqlite
+
+# Data and Document files (PDF, CSV, etc.)
+*.pdf
+*.csv
+*.xlsx
+*.xls
+
+# Local Folders for Imports, Exports and Invoices
+/Importy/
+/Eksporty/
+/invoice/
+/imports/
+/exports/
+
+# System Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
