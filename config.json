@@ -6,7 +6,7 @@
         "invoices_folder": "invoices/"
     },
     "appearance": {
-        "language": "pl",
+        "language": "en",
         "theme": "modern",
         "display_mode": "windowed"
     }

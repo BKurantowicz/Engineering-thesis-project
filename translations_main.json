@@ -5,7 +5,12 @@
         "menu_products": "Asortyment",
         "menu_settings": "Ustawienia",
         "menu_exit": "Wyjście z programu",
-        "app_title": "System wspomagania zarządzania magazynem"
+        "app_title": "System wspomagania zarządzania magazynem",
+        "menu_orders_sub_overview": "Podgląd zamówień",
+        "menu_orders_sub_picklists": "Kreator list poboru",
+        "menu_orders_sub_packing": "Pakowanie zamówień",
+        "menu_orders_sub_lists": "Zarządzanie listami",
+        "menu_orders_sub_confirm": "Potwierdź nadanie"
     },
     "en": {
         "menu_dashboard": "Dashboard (WMS Analysis)",
@@ -13,6 +18,11 @@
         "menu_products": "Products",
         "menu_settings": "Settings",
         "menu_exit": "Exit Program",
-        "app_title": "Warehouse Management System"
+        "app_title": "Warehouse Management System",
+        "menu_orders_sub_overview": "Orders Overwiew",
+        "menu_orders_sub_picklists": "Picking List Creator",
+        "menu_orders_sub_packing": "Order Packing",
+        "menu_orders_sub_lists": "List Management",
+        "menu_orders_sub_confirm": "Confirm shipment"
     }
 }
