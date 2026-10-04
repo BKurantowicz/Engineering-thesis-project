@@ -1,20 +1,21 @@
 import json
+import os
 
-class Translator:
-    """Handles multi-language translation loading and key resolution for the UI."""
-    def __init__(self, lang_code="pl"):
+class translator:
+    """Handles multi-language translation loading for specific modules."""
+    def __init__(self, lang_code="pl", file_name="translations_main.json"):
         self.lang_code = lang_code
+        self.file_name = file_name
         self.translations = self.load_translations()
 
     def load_translations(self):
-        """Loads translations from the translations.json file based on the active language."""
+        """Loads translations from the specified JSON file."""
         try:
-            with open("translations_main.json", "r", encoding="utf-8") as f:
+            with open(self.file_name, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                # Returns dictionary for selected language, defaults to Polish if not found
                 return data.get(self.lang_code, data.get("pl", {}))
         except FileNotFoundError:
-            print("Warning: translations_main.json not found!")
+            print(f"Warning: {self.file_name} not found!")
             return {}
 
     def t(self, key, default=""):

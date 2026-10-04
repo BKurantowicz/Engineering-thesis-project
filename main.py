@@ -8,13 +8,8 @@ from PySide6.QtCore import Qt
 
 # Import core modules
 from models.database import DatabaseManager
-from utils.translations import Translator
-
-# Target view imports (to be implemented as we build modules)
-# from views.main_dashboard.dashboard_view import DashboardView
-# from views.orders.orders_view import OrdersView
-# from views.products.products_view import ProductsView
-# from views.settings.settings_view import SettingsView
+from utils.translations import translator
+from views.orders.orders_view import OrdersView
 
 class MainWindow(QMainWindow):
     """Main application window acting as the router/container for all views."""
@@ -22,6 +17,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.config = config
         self.t = translator.t  # Shortcut to translation function
+        
+        # Capture lang_code from config to pass to child views
+        self.lang_code = self.config.get("appearance", {}).get("language", "pl")
         
         # Initialize database manager
         db_path = self.config.get("paths", {}).get("database", "warehouse.db")
@@ -63,27 +61,55 @@ class MainWindow(QMainWindow):
         self.sidebar_layout.setContentsMargins(10, 20, 10, 20)
         self.sidebar_layout.setAlignment(Qt.AlignTop)
 
-        # Initialize sidebar buttons using translation keys
+        # Główne przyciski
         self.btn_dashboard = QPushButton(self.t("menu_dashboard"))
         self.btn_orders = QPushButton(self.t("menu_orders"))
+        
+        # --- AKORDEON SUB-MENU DLA ZAMÓWIEŃ ---
+        self.orders_submenu = QFrame()
+        self.orders_submenu_layout = QVBoxLayout(self.orders_submenu)
+        self.orders_submenu_layout.setContentsMargins(30, 0, 0, 0) # Wcięcie z lewej!
+        self.orders_submenu_layout.setSpacing(5)
+        
+        self.btn_sub_overview = QPushButton(self.t("menu_orders_sub_overview"))
+        self.btn_sub_picklists = QPushButton(self.t("menu_orders_sub_picklists"))
+        self.btn_sub_packing = QPushButton(self.t("menu_orders_sub_packing"))
+        self.btn_sub_lists = QPushButton(self.t("menu_orders_sub_lists"))
+        self.btn_sub_confirm = QPushButton(self.t("menu_orders_sub_confirm"))
+        
+        for btn in [self.btn_sub_overview, self.btn_sub_picklists, self.btn_sub_packing, self.btn_sub_lists, self.btn_sub_confirm]:
+            btn.setStyleSheet("""
+                QPushButton { background-color: transparent; color: #8fbcbb; text-align: left; padding: 5px; border: none; font-size: 13px; }
+                QPushButton:hover { color: #ffffff; }
+            """)
+            self.orders_submenu_layout.addWidget(btn)
+            
+        self.orders_submenu.setVisible(False) # Domyślnie ukryte
+        
+        # Reszta głównego menu
         self.btn_products = QPushButton(self.t("menu_products"))
         self.btn_settings = QPushButton(self.t("menu_settings"))
         self.btn_exit = QPushButton(self.t("menu_exit"))
-        
-        # Style exit button differently
         self.btn_exit.setStyleSheet("background-color: #8b0000; color: white; text-align: center;")
 
-        # Add widgets to sidebar layout
+        # Dodajemy wszystko do głównego layoutu sidebaru
         self.sidebar_layout.addWidget(self.btn_dashboard)
         self.sidebar_layout.addWidget(self.btn_orders)
+        self.sidebar_layout.addWidget(self.orders_submenu) # Wrzucamy kontener pod zamówienia
         self.sidebar_layout.addWidget(self.btn_products)
         self.sidebar_layout.addWidget(self.btn_settings)
         self.sidebar_layout.addStretch()
         self.sidebar_layout.addWidget(self.btn_exit)
 
-        # Connect button signals to stacked widget index switcher
+        # --- LOGIKA PRZEŁĄCZANIA ---
         self.btn_dashboard.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
-        self.btn_orders.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
+        
+        # Kliknięcie w "Zamówienia" zwija/rozwija menu!
+        self.btn_orders.clicked.connect(lambda: self.orders_submenu.setVisible(not self.orders_submenu.isVisible()))
+        
+        # Kliknięcie w "Podgląd zamówień" otwiera faktyczny widok
+        self.btn_sub_overview.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
+        
         self.btn_products.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
         self.btn_settings.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))
         self.btn_exit.clicked.connect(self.close)
@@ -94,15 +120,20 @@ class MainWindow(QMainWindow):
         """Sets up the central stacked widget for switching views."""
         self.stacked_widget = QStackedWidget()
         
-        # Temporary placeholder views (to be replaced with actual view classes)
+        # Temporary placeholder views 
         self.view_dashboard = QLabel(f"<h2>{self.t('menu_dashboard')}</h2>")
-        self.view_orders = QLabel(f"<h2>{self.t('menu_orders')}</h2>")
+        
+        # Pass self.lang_code instead of undefined lang_code
+        self.view_orders = OrdersView(self.lang_code)
+        
         self.view_products = QLabel(f"<h2>{self.t('menu_products')}</h2>")
         self.view_settings = QLabel(f"<h2>{self.t('menu_settings')}</h2>")
 
         # Add placeholders to stack container
         for view in [self.view_dashboard, self.view_orders, self.view_products, self.view_settings]:
-            view.setAlignment(Qt.AlignCenter)
+            # Use isinstance to prevent error on standard widgets that don't have setAlignment
+            if isinstance(view, QLabel):
+                view.setAlignment(Qt.AlignCenter)
             self.stacked_widget.addWidget(view)
 
         self.main_layout.addWidget(self.stacked_widget)
@@ -125,10 +156,12 @@ if __name__ == "__main__":
     # Load configuration and language translator prior to UI rendering
     config = load_config()
     lang_code = config.get("appearance", {}).get("language", "pl")
-    translator = Translator(lang_code)
+    
+    # Matching the variable name properly
+    lang_translator = translator(lang_code, "translations_main.json")
     
     # Instantiate and display the main window
-    window = MainWindow(config, translator)
+    window = MainWindow(config, lang_translator)
     window.show()
     
     # Execute application event loop
