@@ -130,7 +130,6 @@ class OrdersView(QWidget):
             QComboBox QAbstractItemView { background-color: #2e3440; color: white; selection-background-color: #3b82f6; outline: none; border: 1px solid #4c566a; }
         """)
         
-        # Adding predefined ranges. The second argument (e.g. 'last_7') is the internal data key we'll use for SQL queries later.
         self.date_filter.addItem(self.t('ord_filter_last_7'), "last_7")
         self.date_filter.addItem(self.t('ord_filter_this_week'), "this_week")
         self.date_filter.addItem(self.t('ord_filter_last_30'), "last_30")
@@ -139,17 +138,14 @@ class OrdersView(QWidget):
         self.date_filter.addItem(self.t('ord_filter_this_year'), "this_year")
         self.date_filter.addItem(self.t('ord_filter_last_365'), "last_365")
         
-        # Dynamic years generation
-        # TODO: Replace '2024' with an actual DB query: SELECT MIN(strftime('%Y', order_date)) FROM orders
         current_year = QDate.currentDate().year()
         oldest_order_year = 2024 
-        
         for year in range(current_year, oldest_order_year - 1, -1):
             self.date_filter.addItem(f"{year}", f"year_{year}")
 
         self.toolbar_layout.addWidget(self.date_filter)
 
-        # 3. Global Actions
+        # 3. Global Actions & Pagination Limits
         btn_add = QPushButton(self.t('act_add'))
         btn_add.setStyleSheet("background-color: #3b4252; color: white; border: 1px solid #4c566a; padding: 8px;")
         
@@ -157,12 +153,33 @@ class OrdersView(QWidget):
         btn_import.setStyleSheet("background-color: #3b82f6; color: white; border: none; padding: 8px; font-weight: bold;")
         
         btn_markets = QPushButton(self.t('ord_btn_markets'))
-        btn_max = QPushButton(self.t('ord_btn_max'))
+        btn_markets.setStyleSheet("background-color: #3b4252; color: white; border: 1px solid #4c566a; padding: 8px;")
+
+        # Dropdown Pagination Filter
+        self.limit_filter = QComboBox()
+        self.limit_filter.setStyleSheet("""
+            QComboBox { background-color: #2e3440; color: white; border: 1px solid #4c566a; padding: 8px; font-weight: bold; }
+            QComboBox::drop-down { border: none; }
+            QComboBox QAbstractItemView { background-color: #2e3440; color: white; selection-background-color: #3b82f6; outline: none; border: 1px solid #4c566a; }
+        """)
         
-        for btn in [btn_add, btn_import, btn_markets, btn_max]:
-            if btn not in [btn_add, btn_import]:
-                btn.setStyleSheet("background-color: #3b4252; color: white; border: 1px solid #4c566a; padding: 8px;")
-            self.toolbar_layout.addWidget(btn)
+        # Add numeric limits WITH the translated unit (e.g. "50 zamówień"), but keep the raw integer as data
+        unit = self.t('ord_limit_unit')
+        for limit in ["50", "100", "250", "500"]:
+            display_text = f"{limit} {unit}"
+            self.limit_filter.addItem(display_text, int(limit))
+            
+        self.limit_filter.addItem(self.t('ord_limit_all'), 0)
+        
+        # Dodawanie elementów do układu jeden po drugim
+        self.toolbar_layout.addWidget(btn_add)
+        self.toolbar_layout.addWidget(btn_import)
+        self.toolbar_layout.addWidget(btn_markets)
+        
+        limit_lbl = QLabel(f"<span style='color: white; margin-left: 10px;'>{self.t('ord_limit_label')}</span>")
+        self.toolbar_layout.addWidget(limit_lbl)
+        
+        self.toolbar_layout.addWidget(self.limit_filter)
 
         self.layout.addLayout(self.toolbar_layout)
 

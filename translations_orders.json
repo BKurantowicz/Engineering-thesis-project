@@ -35,7 +35,10 @@
         "ord_filter_this_month": "Ten miesiąc",
         "ord_filter_last_90": "Ostatnie 90 dni",
         "ord_filter_this_year": "Ten rok",
-        "ord_filter_last_365": "Ostatnie 365 dni"
+        "ord_filter_last_365": "Ostatnie 365 dni",
+        "ord_limit_all": "Wszystkie",
+        "ord_limit_label": "Wyświetl:",
+        "ord_limit_unit": "zamówień"
     },
     "en": {
         "ord_title": "Order Management",
@@ -75,6 +78,9 @@
         "ord_filter_this_month": "This month",
         "ord_filter_last_90": "Last 90 days",
         "ord_filter_this_year": "This year",
-        "ord_filter_last_365": "Last 365 days"
+        "ord_filter_last_365": "Last 365 days",
+        "ord_limit_all": "All",
+        "ord_limit_label": "Show:",
+        "ord_limit_unit": "orders"
     }
 }
