@@ -13,6 +13,7 @@ env/
 .idea/
 
 # Database files
+seed_db.py
 *.db
 *.sqlite3
 *.sqlite
