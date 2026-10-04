@@ -1,0 +1,13 @@
+{
+    "paths": {
+        "database": "warehouse.db",
+        "imports_folder": "imports/",
+        "exports_folder": "exports/",
+        "invoices_folder": "invoices/"
+    },
+    "appearance": {
+        "language": "pl",
+        "theme": "modern",
+        "display_mode": "windowed"
+    }
+}

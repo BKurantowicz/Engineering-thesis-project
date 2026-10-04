@@ -24,11 +24,10 @@ env/
 *.xls
 
 # Local Folders for Imports, Exports and Invoices
-/Importy/
-/Eksporty/
-/invoice/
 /imports/
 /exports/
+/invoices/
+
 
 # System Files
 .DS_Store

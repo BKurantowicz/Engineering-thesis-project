@@ -1,0 +1,18 @@
+{
+    "pl": {
+        "menu_dashboard": "Dashboard (Analiza WMS)",
+        "menu_orders": "Zamówienia",
+        "menu_products": "Asortyment",
+        "menu_settings": "Ustawienia",
+        "menu_exit": "Wyjście z programu",
+        "app_title": "System wspomagania zarządzania magazynem"
+    },
+    "en": {
+        "menu_dashboard": "Dashboard (WMS Analysis)",
+        "menu_orders": "Orders",
+        "menu_products": "Products",
+        "menu_settings": "Settings",
+        "menu_exit": "Exit Program",
+        "app_title": "Warehouse Management System"
+    }
+}
