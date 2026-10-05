@@ -30,6 +30,20 @@ The application is built with a focus on usability and supports bilingual interf
 
 * **Configuration:** JSON - used for local application settings, paths, and user preferences.
 
+## 📸 UI Preview / Screenshots
+
+* **Orders Dashboard:** `![Orders View](link_to_image.png)`
+* **Dark Theme Interface:** `![Dark Theme](link_to_image.png)`
+
+📦 WMS-Project
+ ┣ 📂 models             # SQLite database manager and models <br>
+ ┣ 📂 utils              # Helpers (e.g., i18n JSON Translator) <br>
+ ┣ 📂 views              # PySide6 UI views (Dashboard, Orders, Products) <br>
+ ┣ 📜 main.py            # Main application router and window <br>
+ ┣ 📜 seed_db.py         # Faker script for generating test data <br>
+ ┣ 📜 config.json        # Local app configuration and styling paths <br>
+ ┗ 📜 translations_*.json # Feature-based language dictionaries
+
 ## 🗄️ Database Architecture
 
 Below is the Entity-Relationship Diagram (ERD) mapping the core structure of the system. Dictionary tables (prefixed with `DICT_`) store names in both Polish (`name_pl`) and English (`name_en`) to natively support bilingual interface requirements.
@@ -43,7 +57,6 @@ erDiagram
         string password_hash
         string role
     }
-
     CUSTOMERS {
         int id PK
         string first_name
@@ -51,7 +64,6 @@ erDiagram
         string email
         string phone
     }
-
     PRODUCTS {
         int id PK
         string sku
@@ -64,12 +76,30 @@ erDiagram
         int id PK
         string shelf_code "e.g., A1-01"
     }
-
     INVENTORY {
         int id PK
         int product_id FK
         int shelf_id FK
         int quantity
+    }
+    INVENTORY_TRANSACTIONS {
+        int id PK
+        int product_id FK
+        int shelf_id FK
+        int user_id FK
+        int quantity_change "e.g., -2 or +10"
+        string transaction_type "e.g., PICK, RESTOCK"
+        datetime created_at
+    }
+    PICK_LISTS {
+        int id PK
+        string status "e.g., PENDING, PICKING"
+        int assigned_user_id FK
+        datetime created_at
+    }
+    PICK_LIST_ORDERS {
+        int pick_list_id PK, FK
+        int order_id PK, FK
     }
 
     %% ORDER & INVOICE MODULE %%
@@ -82,7 +112,6 @@ erDiagram
         datetime created_at
         float total_amount
     }
-
     ORDER_ITEMS {
         int id PK
         int order_id FK
@@ -90,7 +119,14 @@ erDiagram
         int quantity
         float unit_price
     }
-
+    ORDER_SHIPMENTS {
+        int id PK
+        int order_id FK
+        int shipping_type_id FK
+        string package_code
+        string tracking_number
+        float final_shipping_cost
+    }
     INVOICES {
         int id PK
         int order_id FK
@@ -107,32 +143,53 @@ erDiagram
         string name_pl "e.g., Nowe"
         string name_en "e.g., New"
     }
-
     DICT_SHIPPING_TYPES {
         int id PK
         string name_pl "e.g., Kurier"
         string name_en "e.g., Courier"
     }
-
     DICT_PAYMENT_METHODS {
         int id PK
         string name_pl "e.g., Przelew"
         string name_en "e.g., Bank Transfer"
     }
+    DICT_PACKAGE_TYPES {
+        string package_code PK
+        string name_pl
+        string name_en
+        float max_weight
+        float base_cost
+    }
 
-    %% RELATIONSHIPS %%
+    %% --- RELATIONSHIPS (Reordered for better DAG layout) --- %%
+
+    %% 1. Core Order Flow (Center)
     CUSTOMERS ||--o{ ORDERS : "places"
-    DICT_ORDER_STATUSES ||--o{ ORDERS : "defines status of"
-    DICT_SHIPPING_TYPES ||--o{ ORDERS : "defines shipping for"
-    DICT_PAYMENT_METHODS ||--o{ ORDERS : "defines payment for"
-    
     ORDERS ||--|{ ORDER_ITEMS : "contains"
-    ORDERS ||--o| INVOICES : "generates"
-    
     PRODUCTS ||--o{ ORDER_ITEMS : "is part of"
-    PRODUCTS ||--o{ INVENTORY : "has stock in"
     
+    %% 2. Order Fulfillment & Finance (Bottom/Right)
+    ORDERS ||--o| INVOICES : "generates"
+    ORDERS ||--o| ORDER_SHIPMENTS : "shipped via"
+    ORDERS ||--o{ PICK_LIST_ORDERS : "assigned to"
+    PICK_LISTS ||--|{ PICK_LIST_ORDERS : "contains"
+    
+    %% 3. Inventory & Warehouse (Left/Top)
+    PRODUCTS ||--o{ INVENTORY : "has stock in"
     WAREHOUSE_SHELVES ||--o{ INVENTORY : "stores"
+    PRODUCTS ||--o{ INVENTORY_TRANSACTIONS : "involved in"
+    WAREHOUSE_SHELVES ||--o{ INVENTORY_TRANSACTIONS : "location of"
+    
+    %% 4. User Actions (Top)
+    USERS ||--o{ INVENTORY_TRANSACTIONS : "performs"
+    USERS ||--o{ PICK_LISTS : "assigned to"
+
+    %% 5. Dictionaries (Pushed to the edges)
+    ORDERS }o--|| DICT_ORDER_STATUSES : "has status"
+    ORDERS }o--|| DICT_SHIPPING_TYPES : "uses shipping"
+    ORDERS }o--|| DICT_PAYMENT_METHODS : "uses payment"
+    ORDER_SHIPMENTS }o--|| DICT_SHIPPING_TYPES : "uses service"
+    ORDER_SHIPMENTS }o--|| DICT_PACKAGE_TYPES : "uses package"
 
 ```
 

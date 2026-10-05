@@ -191,6 +191,28 @@ class DatabaseManager:
                 )
             """)
 
+            # 14. Pick Lists
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pick_lists (
+                    pick_list_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    status TEXT DEFAULT 'PENDING', -- np. PENDING, PICKING, COMPLETED
+                    assigned_user_id INTEGER,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(assigned_user_id) REFERENCES users(user_id)
+                )
+            """)
+
+            # 15. Pick List Orders
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pick_list_orders (
+                    pick_list_id INTEGER NOT NULL,
+                    order_id INTEGER NOT NULL,
+                    PRIMARY KEY (pick_list_id, order_id),
+                    FOREIGN KEY(pick_list_id) REFERENCES pick_lists(pick_list_id),
+                    FOREIGN KEY(order_id) REFERENCES orders(order_id)
+                )
+            """)
+
             # --- INITIAL SEED DATA ---
 
             # Seed default order statuses
