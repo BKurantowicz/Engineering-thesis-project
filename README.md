@@ -44,6 +44,17 @@ The application is built with a focus on usability and supports bilingual interf
  ┣ 📜 config.json        # Local app configuration and styling paths <br>
  ┗ 📜 translations_*.json # Feature-based language dictionaries
 
+## 🏛️ System Architecture (UML Class Diagram)
+
+The application utilizes a strictly typed, component-based MVC architecture. Below is the UML representation of the core application flow, highlighting the decoupling of PySide6 Views from SQLite Business Logic.
+
+![MVC.jpg](Images/MVC.jpg)
+
+### Architecture Notes:
+- **Separation of Concerns:** UI classes (`OrdersView`, `OrderAccordionItem`) never execute SQL. They delegate all data retrieval to the `OrderController`.
+- **Dynamic Instantiation:** `OrdersView` acts as a factory, generating multiple `OrderAccordionItem` instances based on the tuple list returned by the controller.
+- **Composition (*--) vs Aggregation (o--):** The diagram strictly differentiates between widgets that physically own other widgets (if you delete the View, the Accordions are destroyed) versus references to shared utilities like the `translator` or `OrderController`.
+
 ## 🗄️ Database Architecture
 
 Below is the Entity-Relationship Diagram (ERD) mapping the core structure of the system. Dictionary tables (prefixed with `DICT_`) store names in both Polish (`name_pl`) and English (`name_en`) to natively support bilingual interface requirements.
