@@ -35,7 +35,7 @@ The application is built with a focus on usability and supports bilingual interf
 * **Orders Dashboard:** `![Orders View](link_to_image.png)`
 * **Dark Theme Interface:** `![Dark Theme](link_to_image.png)`
 
-📦 WMS-Project
+📦 WMS-Project<br>
  ┣ 📂 models             # SQLite database manager and models <br>
  ┣ 📂 utils              # Helpers (e.g., i18n JSON Translator) <br>
  ┣ 📂 views              # PySide6 UI views (Dashboard, Orders, Products) <br>
