@@ -7,19 +7,15 @@ class DatabaseManager:
         self.initialize_database()
 
     def get_connection(self):
-        """Returns a connection to the SQLite database."""
         return sqlite3.connect(self.db_path)
 
     def initialize_database(self):
-        """Creates tables if they do not exist."""
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True) if os.path.dirname(self.db_path) else None
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
 
-            # --- DICTIONARIES (System-wide multilingual lookup tables) ---
-
-            # 1. Order Statuses
+            # --- 1. DICTIONARIES ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS dict_order_statuses (
                     status_code TEXT PRIMARY KEY,
@@ -28,7 +24,6 @@ class DatabaseManager:
                 )
             """)
 
-            # 2. Package Types (Dimensions & Base Cost)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS dict_package_types (
                     package_code TEXT PRIMARY KEY,
@@ -42,7 +37,6 @@ class DatabaseManager:
                 )
             """)
 
-            # 3. Shipping Methods (Couriers)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS dict_shipping_methods (
                     shipping_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,9 +46,15 @@ class DatabaseManager:
                 )
             """)
 
-            # --- CORE BUSINESS TABLES ---
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS dict_payment_methods (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name_pl TEXT NOT NULL,
+                    name_en TEXT NOT NULL
+                )
+            """)
 
-            # 4. Users (Warehouse staff & admins)
+            # --- 2. CORE TABLES ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,11 +62,10 @@ class DatabaseManager:
                     password_hash TEXT NOT NULL,
                     first_name TEXT NOT NULL,
                     last_name TEXT NOT NULL,
-                    role TEXT NOT NULL -- e.g., 'ADMIN', 'WORKER'
+                    role TEXT NOT NULL
                 )
             """)
 
-            # 5. Customers
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS customers (
                     customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,7 +79,6 @@ class DatabaseManager:
                 )
             """)
 
-            # 6. Products (Integrated bilingual names, descriptions, and physical attributes)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS products (
                     product_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,17 +95,16 @@ class DatabaseManager:
                 )
             """)
 
-            # 7. Locations (Warehouse Racks / Storage bins)
+            # --- 3. WAREHOUSE MODULE ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS locations (
                     location_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    location_code TEXT UNIQUE NOT NULL, -- e.g., A-01-01
-                    max_weight REAL NOT NULL,           -- max weight capacity (kg)
-                    max_volume REAL NOT NULL            -- max volume capacity (cm3)
+                    location_code TEXT UNIQUE NOT NULL,
+                    max_weight REAL NOT NULL,
+                    max_volume REAL NOT NULL
                 )
             """)
 
-            # 8. Inventory (Stock levels per product and location, composite PK)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS inventory (
                     product_id INTEGER NOT NULL,
@@ -119,15 +116,14 @@ class DatabaseManager:
                 )
             """)
 
-            # 9. Inventory Transactions (Audit trail for stock movements)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS inventory_transactions (
                     transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     product_id INTEGER NOT NULL,
                     location_id INTEGER NOT NULL,
                     user_id INTEGER,
-                    quantity_change INTEGER NOT NULL, -- e.g., -2 (picking), +10 (restock)
-                    transaction_type TEXT NOT NULL,   -- e.g., 'ORDER_PICK', 'RESTOCK', 'ADJUSTMENT'
+                    quantity_change INTEGER NOT NULL,
+                    transaction_type TEXT NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(product_id) REFERENCES products(product_id),
                     FOREIGN KEY(location_id) REFERENCES locations(location_id),
@@ -135,22 +131,43 @@ class DatabaseManager:
                 )
             """)
 
-            # 10. Orders (Order headers)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pick_lists (
+                    pick_list_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    status TEXT DEFAULT 'PENDING',
+                    assigned_user_id INTEGER,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(assigned_user_id) REFERENCES users(user_id)
+                )
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pick_list_orders (
+                    pick_list_id INTEGER NOT NULL,
+                    order_id INTEGER NOT NULL,
+                    PRIMARY KEY (pick_list_id, order_id),
+                    FOREIGN KEY(pick_list_id) REFERENCES pick_lists(pick_list_id),
+                    FOREIGN KEY(order_id) REFERENCES orders(order_id)
+                )
+            """)
+
+            # --- 4. ORDER & INVOICE MODULE ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS orders (
                     order_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     customer_id INTEGER,
                     status_code TEXT DEFAULT 'NEW',
-                    created_by INTEGER, -- User who created the order
+                    payment_method_id INTEGER,
+                    created_by INTEGER,
                     order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
                     total_amount REAL DEFAULT 0.0,
                     FOREIGN KEY(customer_id) REFERENCES customers(customer_id),
                     FOREIGN KEY(status_code) REFERENCES dict_order_statuses(status_code),
+                    FOREIGN KEY(payment_method_id) REFERENCES dict_payment_methods(id),
                     FOREIGN KEY(created_by) REFERENCES users(user_id)
                 )
             """)
 
-            # 11. Order Items (Cart items / order lines)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS order_items (
                     item_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -163,22 +180,20 @@ class DatabaseManager:
                 )
             """)
 
-            # 12. Order Shipments (Shipping and packaging details for an order)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS order_shipments (
                     shipment_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     order_id INTEGER NOT NULL,
-                    shipping_id INTEGER NOT NULL,
+                    shipping_type_id INTEGER NOT NULL,
                     package_code TEXT NOT NULL,
                     tracking_number TEXT,
                     final_shipping_cost REAL NOT NULL,
                     FOREIGN KEY(order_id) REFERENCES orders(order_id),
-                    FOREIGN KEY(shipping_id) REFERENCES dict_shipping_methods(shipping_id),
+                    FOREIGN KEY(shipping_type_id) REFERENCES dict_shipping_methods(shipping_id),
                     FOREIGN KEY(package_code) REFERENCES dict_package_types(package_code)
                 )
             """)
 
-            # 13. Invoices
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS invoices (
                     invoice_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -191,31 +206,7 @@ class DatabaseManager:
                 )
             """)
 
-            # 14. Pick Lists
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS pick_lists (
-                    pick_list_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    status TEXT DEFAULT 'PENDING', -- np. PENDING, PICKING, COMPLETED
-                    assigned_user_id INTEGER,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(assigned_user_id) REFERENCES users(user_id)
-                )
-            """)
-
-            # 15. Pick List Orders
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS pick_list_orders (
-                    pick_list_id INTEGER NOT NULL,
-                    order_id INTEGER NOT NULL,
-                    PRIMARY KEY (pick_list_id, order_id),
-                    FOREIGN KEY(pick_list_id) REFERENCES pick_lists(pick_list_id),
-                    FOREIGN KEY(order_id) REFERENCES orders(order_id)
-                )
-            """)
-
-            # --- INITIAL SEED DATA ---
-
-            # Seed default order statuses
+            # --- 5. INITIAL SEED DATA ---
             cursor.execute("SELECT COUNT(*) FROM dict_order_statuses")
             if cursor.fetchone()[0] == 0:
                 statuses = [
@@ -226,7 +217,6 @@ class DatabaseManager:
                 ]
                 cursor.executemany("INSERT INTO dict_order_statuses (status_code, name_pl, name_en) VALUES (?, ?, ?)", statuses)
 
-            # Seed default shipping methods
             cursor.execute("SELECT COUNT(*) FROM dict_shipping_methods")
             if cursor.fetchone()[0] == 0:
                 carriers = [
@@ -236,7 +226,6 @@ class DatabaseManager:
                 ]
                 cursor.executemany("INSERT INTO dict_shipping_methods (carrier_name, service_name_pl, service_name_en) VALUES (?, ?, ?)", carriers)
 
-            # Seed default package types
             cursor.execute("SELECT COUNT(*) FROM dict_package_types")
             if cursor.fetchone()[0] == 0:
                 packages = [
@@ -246,6 +235,15 @@ class DatabaseManager:
                     ('CUSTOM_BOX', 'Karton Własny', 'Custom Box', 30.0, 100.0, 100.0, 100.0, 25.00)
                 ]
                 cursor.executemany("INSERT INTO dict_package_types (package_code, name_pl, name_en, max_weight, max_length, max_width, max_height, base_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", packages)
+                
+            cursor.execute("SELECT COUNT(*) FROM dict_payment_methods")
+            if cursor.fetchone()[0] == 0:
+                payments = [
+                    ('Przelew', 'Bank Transfer'), 
+                    ('BLIK', 'BLIK'), 
+                    ('Karta', 'Credit Card')
+                ]
+                cursor.executemany("INSERT INTO dict_payment_methods (name_pl, name_en) VALUES (?, ?)", payments)
 
             conn.commit()
 

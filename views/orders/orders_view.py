@@ -4,11 +4,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 
-# Import core modules
 from utils.translations import translator
+from controllers.order_controller import OrderController
 
 class ClickableRow(QFrame):
-    """Frame that responds to clicks to expand the accordion."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.is_expanded = False
@@ -21,24 +20,29 @@ class ClickableRow(QFrame):
         if self.details_panel:
             self.is_expanded = not self.is_expanded
             self.details_panel.setVisible(self.is_expanded)
-            
             if self.is_expanded:
-                self.setStyleSheet("QFrame { background-color: #3b4252; border-bottom: 1px solid #4c566a; } QLabel { color: white; }")
+                self.setStyleSheet("QFrame { background-color: #3b4252; border-bottom: 1px solid #4c566a; } QLabel { color: white; padding: 5px; }")
             else:
-                self.setStyleSheet("QFrame { background-color: #2e3440; border-bottom: 1px solid #4c566a; } QLabel { color: #d8dee9; }")
+                self.setStyleSheet("QFrame { background-color: #2e3440; border-bottom: 1px solid #4c566a; } QLabel { color: #d8dee9; padding: 5px; }")
         super().mousePressEvent(event)
 
 
 class OrderAccordionItem(QWidget):
-    """A single order row with an expandable details panel."""
-    def __init__(self, data, translator_obj, parent=None):
+    def __init__(self, order_data, translator_obj, controller, parent=None):
         super().__init__(parent)
         self.t = translator_obj.t
+        self.controller = controller
+        
+        # Store values for in-memory filtering
+        self.order_id_str = order_data['no'].lower()
+        self.customer_str = order_data['name'].lower()
+        self.status_str = order_data['status'].lower()
+        
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
 
-        # --- MAIN ROW (Order Header) ---
+        # Main summary row
         self.summary_row = ClickableRow()
         self.summary_row.setStyleSheet("QFrame { background-color: #2e3440; border-bottom: 1px solid #4c566a; } QLabel { color: #d8dee9; padding: 5px; }")
         self.summary_row.setCursor(Qt.PointingHandCursor)
@@ -46,22 +50,21 @@ class OrderAccordionItem(QWidget):
         self.summary_layout.setContentsMargins(5, 5, 5, 5)
 
         columns = [
-            (data['no'], 1), (data['date_in'], 2), (data['date_out'], 2), 
-            (data['status'], 2), (data['net'], 1), (data['gross'], 1), 
-            (data['pay'], 1), (data['pkg'], 1), (data['ship'], 1), (data['name'], 2)
+            (order_data['no'], 1), (order_data['date_in'], 2), (order_data['date_out'], 2), 
+            (order_data['status'], 2), (order_data['net'], 1), (order_data['gross'], 1), 
+            (order_data['pay'], 1), (order_data['pkg'], 1), (order_data['ship'], 1), (order_data['name'], 2)
         ]
 
         for text, stretch in columns:
-            lbl = QLabel(text)
+            lbl = QLabel(str(text))
             self.summary_layout.addWidget(lbl, stretch)
 
-        # --- DETAILS PANEL ---
+        # Expanded details panel
         self.details_panel = QFrame()
         self.details_panel.setStyleSheet("background-color: #242933; border: 1px solid #3b4252;")
         self.details_layout = QHBoxLayout(self.details_panel)
         self.details_layout.setContentsMargins(15, 15, 15, 15)
 
-        # Left side: Action buttons
         self.actions_layout = QVBoxLayout()
         self.actions_layout.setAlignment(Qt.AlignTop)
         
@@ -74,8 +77,9 @@ class OrderAccordionItem(QWidget):
             btn.setStyleSheet("background-color: transparent; color: #8fbcbb; border: none; padding: 5px; text-align: left;")
             self.actions_layout.addWidget(btn)
 
-        # Right side: Products table
-        self.products_table = QTableWidget(3, 6)
+        items_data = self.controller.get_order_items(order_data['raw_id'])
+        
+        self.products_table = QTableWidget(len(items_data), 6)
         self.products_table.setHorizontalHeaderLabels([
             self.t('tbl_sku'), self.t('tbl_name'), self.t('tbl_qty'), 
             self.t('tbl_net'), self.t('tbl_gross'), self.t('tbl_weight')
@@ -86,9 +90,18 @@ class OrderAccordionItem(QWidget):
             QHeaderView::section { background-color: #242933; color: #8fbcbb; border: none; font-weight: bold; }
         """)
         
-        mock_prod = ["GPU-0091", "Karta graficzna", "1 szt.", "2400.00 zł", "2952.00 zł", "1.70 kg"]
-        for col, text in enumerate(mock_prod):
-            self.products_table.setItem(0, col, QTableWidgetItem(text))
+        for row_idx, item in enumerate(items_data):
+            sku, name, qty, gross_price, unit_weight = item
+            net_price = gross_price / 1.23
+            total_gross = gross_price * qty
+            total_weight = unit_weight * qty
+            
+            self.products_table.setItem(row_idx, 0, QTableWidgetItem(sku))
+            self.products_table.setItem(row_idx, 1, QTableWidgetItem(name))
+            self.products_table.setItem(row_idx, 2, QTableWidgetItem(f"{qty} pcs"))
+            self.products_table.setItem(row_idx, 3, QTableWidgetItem(f"{net_price:.2f} PLN"))
+            self.products_table.setItem(row_idx, 4, QTableWidgetItem(f"{total_gross:.2f} PLN"))
+            self.products_table.setItem(row_idx, 5, QTableWidgetItem(f"{total_weight:.2f} kg"))
 
         self.details_layout.addLayout(self.actions_layout, 1)
         self.details_layout.addWidget(self.products_table, 5)
@@ -105,6 +118,8 @@ class OrdersView(QWidget):
         super().__init__()
         self.translator = translator(lang_code, "translations_orders.json")
         self.t = self.translator.t
+        self.controller = OrderController()
+        
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(20, 20, 20, 20)
 
@@ -112,17 +127,21 @@ class OrdersView(QWidget):
         title_lbl.setStyleSheet("color: white;")
         self.layout.addWidget(title_lbl)
 
-        # --- TOP TOOLBAR (Filters, Dates, Global Actions) ---
+        # --- TOP TOOLBAR ---
         self.toolbar_layout = QHBoxLayout()
         
-        # 1. Search boxes
-        for ph in [self.t('ord_search_id'), self.t('ord_search_addr'), self.t('ord_search_sku')]:
-            box = QLineEdit()
-            box.setPlaceholderText(ph)
+        # Search fields with dynamic in-memory filtering
+        self.search_id = QLineEdit()
+        self.search_id.setPlaceholderText(self.t('ord_search_id'))
+        
+        self.search_addr = QLineEdit()
+        self.search_addr.setPlaceholderText(self.t('ord_search_addr'))
+        
+        for box in [self.search_id, self.search_addr]:
             box.setStyleSheet("background-color: #2e3440; color: white; border: 1px solid #4c566a; padding: 8px;")
+            box.textChanged.connect(self.filter_orders_in_memory)
             self.toolbar_layout.addWidget(box)
             
-        # 2. Dropdown Date Filter (QComboBox)
         self.date_filter = QComboBox()
         self.date_filter.setStyleSheet("""
             QComboBox { background-color: #2e3440; color: white; border: 1px solid #4c566a; padding: 8px; font-weight: bold; }
@@ -130,6 +149,8 @@ class OrdersView(QWidget):
             QComboBox QAbstractItemView { background-color: #2e3440; color: white; selection-background-color: #3b82f6; outline: none; border: 1px solid #4c566a; }
         """)
         
+        # Default empty option to prevent immediate filtering
+        self.date_filter.addItem("Filter by date...", "") 
         self.date_filter.addItem(self.t('ord_filter_last_7'), "last_7")
         self.date_filter.addItem(self.t('ord_filter_this_week'), "this_week")
         self.date_filter.addItem(self.t('ord_filter_last_30'), "last_30")
@@ -140,22 +161,21 @@ class OrdersView(QWidget):
         
         current_year = QDate.currentDate().year()
         oldest_order_year = 2024 
-        for year in range(current_year, oldest_order_year - 1, -1):
-            self.date_filter.addItem(f"{year}", f"year_{year}")
-
+        
+        # Offset by -1 to prevent duplicating 'this_year' logic
+        for year in range(current_year - 1, oldest_order_year - 1, -1):
+            self.date_filter.addItem(str(year), f"year_{year}")
+            
+        self.date_filter.currentIndexChanged.connect(self.load_orders)
         self.toolbar_layout.addWidget(self.date_filter)
 
-        # 3. Global Actions & Pagination Limits
+        # Global Actions
         btn_add = QPushButton(self.t('act_add'))
         btn_add.setStyleSheet("background-color: #3b4252; color: white; border: 1px solid #4c566a; padding: 8px;")
         
         btn_import = QPushButton(self.t('act_import'))
         btn_import.setStyleSheet("background-color: #3b82f6; color: white; border: none; padding: 8px; font-weight: bold;")
         
-        btn_markets = QPushButton(self.t('ord_btn_markets'))
-        btn_markets.setStyleSheet("background-color: #3b4252; color: white; border: 1px solid #4c566a; padding: 8px;")
-
-        # Dropdown Pagination Filter
         self.limit_filter = QComboBox()
         self.limit_filter.setStyleSheet("""
             QComboBox { background-color: #2e3440; color: white; border: 1px solid #4c566a; padding: 8px; font-weight: bold; }
@@ -163,22 +183,16 @@ class OrdersView(QWidget):
             QComboBox QAbstractItemView { background-color: #2e3440; color: white; selection-background-color: #3b82f6; outline: none; border: 1px solid #4c566a; }
         """)
         
-        # Add numeric limits WITH the translated unit (e.g. "50 zamówień"), but keep the raw integer as data
         unit = self.t('ord_limit_unit')
         for limit in ["50", "100", "250", "500"]:
-            display_text = f"{limit} {unit}"
-            self.limit_filter.addItem(display_text, int(limit))
-            
+            self.limit_filter.addItem(f"{limit} {unit}", int(limit))
         self.limit_filter.addItem(self.t('ord_limit_all'), 0)
         
-        # Dodawanie elementów do układu jeden po drugim
+        self.limit_filter.currentIndexChanged.connect(self.load_orders)
+
         self.toolbar_layout.addWidget(btn_add)
         self.toolbar_layout.addWidget(btn_import)
-        self.toolbar_layout.addWidget(btn_markets)
-        
-        limit_lbl = QLabel(f"<span style='color: white; margin-left: 10px;'>{self.t('ord_limit_label')}</span>")
-        self.toolbar_layout.addWidget(limit_lbl)
-        
+        self.toolbar_layout.addWidget(QLabel(f"<span style='color: white; margin-left: 10px;'>{self.t('ord_limit_label')}</span>"))
         self.toolbar_layout.addWidget(self.limit_filter)
 
         self.layout.addLayout(self.toolbar_layout)
@@ -205,6 +219,8 @@ class OrdersView(QWidget):
         # --- ORDERS LIST (ScrollArea) ---
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
+        # Fix layout shifts by enforcing scrollbar visibility
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.scroll_area.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
 
         self.scroll_content = QWidget()
@@ -214,14 +230,55 @@ class OrdersView(QWidget):
         self.scroll_layout.setContentsMargins(0, 0, 0, 0)
         self.scroll_layout.setSpacing(0)
 
-        for i in range(1, 15):
-            mock_data = {
-                'no': f"ORD-164{i:02d}", 'date_in': "2026-04-26 09:04", 'date_out': "-", 
-                'status': "W realizacji", 'net': "13350", 'gross': "16420,5", 
-                'pay': "-", 'pkg': "-", 'ship': "0", 'name': "Sylwester"
-            }
-            item = OrderAccordionItem(mock_data, self.translator)
-            self.scroll_layout.addWidget(item)
-
         self.scroll_area.setWidget(self.scroll_content)
         self.layout.addWidget(self.scroll_area)
+        
+        self.load_orders()
+
+    def filter_orders_in_memory(self):
+        """Locally filters UI items based on search input."""
+        search_id_text = self.search_id.text().lower()
+        search_addr_text = self.search_addr.text().lower()
+        
+        for i in range(self.scroll_layout.count()):
+            widget = self.scroll_layout.itemAt(i).widget()
+            if isinstance(widget, OrderAccordionItem):
+                match_id = search_id_text in widget.order_id_str or search_id_text in widget.status_str
+                match_addr = search_addr_text in widget.customer_str
+                
+                widget.setVisible(match_id and match_addr)
+
+    def load_orders(self):
+        """Fetches data from DB and rebuilds the scroll area."""
+        while self.scroll_layout.count():
+            child = self.scroll_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+                
+        limit = self.limit_filter.currentData()
+        date_filter = self.date_filter.currentData()
+        
+        orders = self.controller.get_orders(limit=limit, date_filter=date_filter)
+        
+        # DODAJ TĘ LINIJKĘ:
+        print(f"---> DEBUG: Downloaded {len(orders)} orders (Limit: {limit}, Data: '{date_filter}')")
+        
+        for order in orders:
+            order_id, order_date, status_code, total_amount, first_name, last_name, payment, box_type, tracking = order
+            net_amount = total_amount / 1.23 
+            
+            formatted_data = {
+                'raw_id': order_id, 
+                'no': f"ORD-{order_id:05d}",
+                'date_in': order_date[:16], 
+                'date_out': order_date[:16] if status_code == 'SHIPPED' else "-", 
+                'status': status_code, 
+                'net': f"{net_amount:.2f}", 
+                'gross': f"{total_amount:.2f}", 
+                'pay': payment or "-", 
+                'pkg': box_type or "-", 
+                'ship': "14.99" if status_code == 'SHIPPED' else "0.00", 
+                'name': f"{first_name} {last_name}"
+            }
+            item = OrderAccordionItem(formatted_data, self.translator, self.controller)
+            self.scroll_layout.addWidget(item)
