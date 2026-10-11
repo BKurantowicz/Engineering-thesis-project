@@ -18,7 +18,7 @@ class MainWindow(QMainWindow):
     def __init__(self, config, translator):
         super().__init__()
         self.config = config
-        self.translator = translator # Zapamiętujemy cały obiekt translatora dla widoków
+        self.translator = translator # Store the full translator object for views
         self.t = translator.t  # Shortcut to translation function
         
         # Capture lang_code from config using strict keys (will raise KeyError if missing)
@@ -64,14 +64,14 @@ class MainWindow(QMainWindow):
         self.sidebar_layout.setContentsMargins(10, 20, 10, 20)
         self.sidebar_layout.setAlignment(Qt.AlignTop)
 
-        # Główne przyciski
+        # Main buttons
         self.btn_dashboard = QPushButton(self.t("menu_dashboard"))
         self.btn_orders = QPushButton(self.t("menu_orders"))
         
-        # --- AKORDEON SUB-MENU DLA ZAMÓWIEŃ ---
+        # --- ORDERS SUB-MENU ACCORDION ---
         self.orders_submenu = QFrame()
         self.orders_submenu_layout = QVBoxLayout(self.orders_submenu)
-        self.orders_submenu_layout.setContentsMargins(30, 0, 0, 0) # Wcięcie z lewej!
+        self.orders_submenu_layout.setContentsMargins(30, 0, 0, 0) # Left margin indentation!
         self.orders_submenu_layout.setSpacing(5)
         
         self.btn_sub_overview = QPushButton(self.t("menu_orders_sub_overview"))
@@ -87,30 +87,30 @@ class MainWindow(QMainWindow):
             """)
             self.orders_submenu_layout.addWidget(btn)
             
-        self.orders_submenu.setVisible(False) # Domyślnie ukryte
+        self.orders_submenu.setVisible(False) # Hidden by default
         
-        # Reszta głównego menu
+        # Rest of the main menu
         self.btn_products = QPushButton(self.t("menu_products"))
         self.btn_settings = QPushButton(self.t("menu_settings"))
         self.btn_exit = QPushButton(self.t("menu_exit"))
         self.btn_exit.setStyleSheet("background-color: #8b0000; color: white; text-align: center;")
 
-        # Dodajemy wszystko do głównego layoutu sidebaru
+        # Add everything to the main sidebar layout
         self.sidebar_layout.addWidget(self.btn_dashboard)
         self.sidebar_layout.addWidget(self.btn_orders)
-        self.sidebar_layout.addWidget(self.orders_submenu) # Wrzucamy kontener pod zamówienia
+        self.sidebar_layout.addWidget(self.orders_submenu) # Add orders submenu container
         self.sidebar_layout.addWidget(self.btn_products)
         self.sidebar_layout.addWidget(self.btn_settings)
         self.sidebar_layout.addStretch()
         self.sidebar_layout.addWidget(self.btn_exit)
 
-        # --- LOGIKA PRZEŁĄCZANIA ---
+        # --- ROUTING / SWITCHING LOGIC ---
         self.btn_dashboard.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         
-        # Kliknięcie w "Zamówienia" zwija/rozwija menu!
+        # Clicking "Orders" collapses/expands the menu!
         self.btn_orders.clicked.connect(lambda: self.orders_submenu.setVisible(not self.orders_submenu.isVisible()))
         
-        # Kliknięcie w "Podgląd zamówień" otwiera faktyczny widok
+        # Clicking "Order Overview" opens the actual view
         self.btn_sub_overview.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
         
         self.btn_products.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
@@ -127,7 +127,7 @@ class MainWindow(QMainWindow):
         self.dashboard_ctrl = DashboardController(db_path=self.db_path)
         self.view_dashboard = DashboardView(translator=self.translator, controller=self.dashboard_ctrl)
         
-        # Zastępuje mocki prawdziwymi danymi z bazy od razu po utworzeniu interfejsu
+        # Replace mocks with real database data right after UI initialization
         self.view_dashboard.load_real_data()
         
         # Pass self.lang_code instead of undefined lang_code
@@ -148,7 +148,7 @@ class MainWindow(QMainWindow):
 
 def load_config():
     """Loads application configuration from the root config.json file."""
-    # Brak bloku try-except. Jeśli plik nie istnieje, wywali FileNotFoundError.
+    # No try-except block. If the file does not exist, it will raise FileNotFoundError.
     with open('config.json', 'r', encoding='utf-8') as f:
         return json.load(f)
 
