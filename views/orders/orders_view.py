@@ -114,9 +114,10 @@ class OrderAccordionItem(QWidget):
 
 
 class OrdersView(QWidget):
-    def __init__(self, lang_code):
+    def __init__(self, translator_obj):
         super().__init__()
-        self.translator = translator(lang_code, "utils/translations_orders.json")
+        # Use the global translator object passed from MainWindow instead of creating a new one
+        self.translator = translator_obj
         self.t = self.translator.t
         self.controller = OrderController()
         

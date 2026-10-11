@@ -20,6 +20,8 @@ The application is built with a focus on usability and supports bilingual interf
 
 - **Bilingual Support:** Database architecture designed to support multiple languages natively.
 
+- **Dynamic Configuration & Theming:** Centralized settings module managing system paths, company metadata, and localization. Features a live CSS `ThemeManager` for zero-restart visual switching (Dark, Light, Modern) and scalable UI fonts safely persisted in a recursive JSON structure.
+
 ## 🛠️ Technology Stack
 
 - **Language:** Python 3
@@ -35,15 +37,17 @@ The application is built with a focus on usability and supports bilingual interf
 - **Orders Dashboard:** `![Orders View](link_to_image.png)`
 - **Dark Theme Interface:** `![Dark Theme](link_to_image.png)`
 
-📦 WMS-Project<br>
+📦 WMS-Project <br>
+ ┣ 📂 controllers        # Business logic managers (Orders, Dashboard, Settings) <br>
  ┣ 📂 models             # SQLite database manager and models <br>
- ┣ 📂 utils              # Helpers (e.g., i18n JSON Translator) <br>
-    ┗ 📜 translations_*.json # Feature-based language dictionaries <br>
-    ┣ 📜 translations.py            # Handles multi-language translation loading for specific modules <br>
- ┣ 📂 views              # PySide6 UI views (Dashboard, Orders, Products) <br>
+ ┣ 📂 utils              # Helpers (e.g., i18n JSON Translator, ThemeManager) <br>
+ ┃ ┣ 📜 translations_*.json # Feature-based language dictionaries <br>
+ ┃ ┣ 📜 translations.py  # Handles dynamic glob-based multi-language translation loading <br>
+ ┃ ┗ 📜 theme_manager.py # Generates and injects global QSS stylesheets dynamically <br>
+ ┣ 📂 views              # PySide6 UI views (Dashboard, Orders, Products, Settings) <br>
  ┣ 📜 main.py            # Main application router and window <br>
  ┣ 📜 seed_db.py         # Faker script for generating test data <br>
- ┣ 📜 config.json        # Local app configuration and styling paths
+ ┗ 📜 config.json        # Local app configuration, safe fallbacks, and user preferences
 
 ## 🏛️ System Architecture (UML Class Diagram)
 
@@ -52,7 +56,9 @@ The application utilizes a strictly typed, component-based MVC architecture. Bel
 
 ```mermaid
 classDiagram
-    %% CORE APP
+    direction TB
+
+    %% --- ENTRY POINT & ROUTER ---
     class MainApp {
         -config: dict
         -lang_code: string
@@ -62,27 +68,28 @@ classDiagram
     class MainWindow {
         -view_orders: OrdersView
         -view_dashboard: DashboardView
+        -view_settings: SettingsView
         -translator: translator
         +setup_content_area() void
         +change_view(view_name: string) void
     }
 
+    %% --- UTILITIES ---
     class translator {
         -lang_code: string
         -translations: dict
-        +t(key: string) string
+        +load_all_translations(directory: string) void
+        +t(key: string, fallback: string) string
     }
 
-    class DatabaseManager {
-        -db_path: string
-        +initialize_database() void
-        +get_connection() Connection
+    class ThemeManager {
+        <<static>>
+        +get_stylesheet(theme_name: string, font_size_name: string) string
     }
 
-    %% DASHBOARD MODULE
+    %% --- VIEWS (UI Layer) ---
     class DashboardView {
         -controller: DashboardController
-        -translator: translator
         -trend_chart: QChart
         -capacity_chart: QChart
         -status_chart: QChart
@@ -91,20 +98,18 @@ classDiagram
         +update_trend_chart(filter_type: string) void
     }
 
-    class DashboardController {
-        -db_path: string
-        +get_order_status_counts() dict
-        +get_warehouse_capacity() dict
-        +get_order_trend(filter_type: string) dict
-    }
-
-    %% ORDERS MODULE
     class OrdersView {
         -controller: OrderController
-        -translator: translator
         -scroll_layout: QVBoxLayout
         +load_orders() void
         +filter_orders_in_memory() void
+    }
+
+    class SettingsView {
+        -controller: SettingsController
+        +setup_ui() void
+        +load_settings() void
+        +save_settings() void
     }
 
     class OrderAccordionItem {
@@ -121,34 +126,67 @@ classDiagram
         +mousePressEvent(event: QEvent) void
     }
 
+    %% --- CONTROLLERS (Business Logic Layer) ---
+    class DashboardController {
+        -db_path: string
+        +get_order_status_counts() dict
+        +get_warehouse_capacity() dict
+        +get_order_trend(filter_type: string) dict
+    }
+
     class OrderController {
         -db_path: string
         +get_orders(limit: int, date_filter: string) list
         +get_order_items(order_id: int) list
     }
 
-    %% RELATIONSHIPS (Main flow)
-    MainApp --> MainWindow : instantiates
-    MainApp --> DatabaseManager : configures path
-    
-    %% Aggregations (hollow diamond)
-    MainWindow o-- translator
-    DashboardView o-- translator
-    OrdersView o-- translator
-    
-    DashboardView o-- DashboardController
-    OrdersView o-- OrderController
+    class SettingsController {
+        -config_path: string
+        -default_config: dict
+        +get_config() dict
+        +save_config(new_config: dict) bool
+        -_merge_configs(default: dict, current: dict) dict
+    }
 
-    %% Compositions (filled diamond)
+    %% --- DATABASE ---
+    class DatabaseManager {
+        -db_path: string
+        +initialize_database() void
+        +get_connection() Connection
+    }
+
+    %% ==========================================
+    %% RELATIONSHIPS & ROUTING (Strictly Ordered)
+    %% ==========================================
+
+    %% 1. Application Init
+    MainApp --> MainWindow : instantiates
+    MainApp ..> DatabaseManager : configures path
+    MainApp ..> ThemeManager : loads initial CSS
+
+    %% 2. Global Aggregations
+    MainWindow o-- translator : holds & injects into views
+
+    %% 3. View Compositions (MainWindow owns the Views)
     MainWindow *-- DashboardView
     MainWindow *-- OrdersView
+    MainWindow *-- SettingsView
     
+    %% 4. View Sub-components
     OrdersView *-- OrderAccordionItem
     OrderAccordionItem *-- ClickableRow
 
-    %% Dependencies (dashed arrow)
-    DashboardController ..> DatabaseManager : connects to SQLite
-    OrderController ..> DatabaseManager : connects to SQLite
+    %% 5. View to Controller Links
+    DashboardView o-- DashboardController
+    OrdersView o-- OrderController
+    SettingsView o-- SettingsController
+
+    %% 6. Controller to Database Links
+    DashboardController ..> DatabaseManager : queries
+    OrderController ..> DatabaseManager : queries
+
+    %% 7. Local Triggers
+    SettingsView ..> ThemeManager : updates CSS on save
 ```
 
 ### Architecture Notes:
