@@ -8,41 +8,42 @@ The application is built with a focus on usability and supports bilingual interf
 
 ## 🚀 Key Features
 
-* **Order Management:** Add, delete, modify, and manage user orders seamlessly.
+- **Order Management:** Add, delete, modify, and manage user orders seamlessly.
 
-* **Invoicing:** Generate and manage invoices independently of customer profiles (supporting B2B/company details and separate billing addresses).
+- **Invoicing:** Generate and manage invoices independently of customer profiles (supporting B2B/company details and separate billing addresses).
 
-* **Data Import:** Built-in tools to import external orders directly into the database.
+- **Data Import:** Built-in tools to import external orders directly into the database.
 
-* **Warehouse Control:** Track inventory levels, product locations (shelves/racks), and pick lists.
+- **Warehouse Control:** Track inventory levels, product locations (shelves/racks), and pick lists.
 
-* **Analytics & Statistics:** View detailed statistics regarding sales, top products, and overall business performance.
+- **Analytics & Statistics:** View detailed statistics regarding sales, top products, and overall business performance.
 
-* **Bilingual Support:** Database architecture designed to support multiple languages natively.
+- **Bilingual Support:** Database architecture designed to support multiple languages natively.
 
 ## 🛠️ Technology Stack
 
-* **Language:** Python 3
+- **Language:** Python 3
 
-* **GUI Framework:** PySide6 (Qt for Python) - ensuring a fast, responsive, and native desktop experience.
+- **GUI Framework:** PySide6 (Qt for Python) - ensuring a fast, responsive, and native desktop experience.
 
-* **Database:** SQLite3 - lightweight, serverless, and robust internal database.
+- **Database:** SQLite3 - lightweight, serverless, and robust internal database.
 
-* **Configuration:** JSON - used for local application settings, paths, and user preferences.
+- **Configuration:** JSON - used for local application settings, paths, and user preferences.
 
 ## 📸 UI Preview / Screenshots
 
-* **Orders Dashboard:** `![Orders View](link_to_image.png)`
-* **Dark Theme Interface:** `![Dark Theme](link_to_image.png)`
+- **Orders Dashboard:** `![Orders View](link_to_image.png)`
+- **Dark Theme Interface:** `![Dark Theme](link_to_image.png)`
 
 📦 WMS-Project<br>
  ┣ 📂 models             # SQLite database manager and models <br>
  ┣ 📂 utils              # Helpers (e.g., i18n JSON Translator) <br>
+    ┗ 📜 translations_*.json # Feature-based language dictionaries <br>
+    ┣ 📜 translations.py            # Handles multi-language translation loading for specific modules <br>
  ┣ 📂 views              # PySide6 UI views (Dashboard, Orders, Products) <br>
  ┣ 📜 main.py            # Main application router and window <br>
  ┣ 📜 seed_db.py         # Faker script for generating test data <br>
- ┣ 📜 config.json        # Local app configuration and styling paths <br>
- ┗ 📜 translations_*.json # Feature-based language dictionaries
+ ┣ 📜 config.json        # Local app configuration and styling paths
 
 ## 🏛️ System Architecture (UML Class Diagram)
 

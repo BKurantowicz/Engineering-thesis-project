@@ -163,8 +163,8 @@ if __name__ == "__main__":
     # Strict key access - will raise KeyError if the config structure is invalid
     lang_code = config["appearance"]["language"]
     
-    # Matching the variable name properly
-    lang_translator = translator(lang_code, "translations_main.json")
+    # Added 'utils/' prefix to the file path
+    lang_translator = translator(lang_code, "utils/translations_main.json")
     
     # Instantiate and display the main window
     window = MainWindow(config, lang_translator)

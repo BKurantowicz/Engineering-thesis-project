@@ -116,7 +116,7 @@ class OrderAccordionItem(QWidget):
 class OrdersView(QWidget):
     def __init__(self, lang_code):
         super().__init__()
-        self.translator = translator(lang_code, "translations_orders.json")
+        self.translator = translator(lang_code, "utils/translations_orders.json")
         self.t = self.translator.t
         self.controller = OrderController()
         

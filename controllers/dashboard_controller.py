@@ -51,7 +51,9 @@ class DashboardController:
         return counts
 
     def get_warehouse_capacity(self):
+        """Calculate percentage-based warehouse capacity utilization from inventory table"""
         MAX_CAPACITY = 10000 
+        
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
@@ -73,8 +75,8 @@ class DashboardController:
             return {"free_space": 100, "taken_on_racks": 0, "in_picking": 0}
 
     def get_order_trend(self, filter_type="7_days"):
-        """Fetches dynamic order inflow trend based on UI combobox selection."""
-        trend_data = {}
+        """Fetches dynamic order inflow trend for both current and previous periods."""
+        trend_data = {'dates': [], 'current': [], 'previous': []}
         today = datetime.now()
 
         try:
@@ -83,43 +85,87 @@ class DashboardController:
                 
                 if filter_type == "7_days" or filter_type == "this_month":
                     days = 7 if filter_type == "7_days" else 30
-                    # Pre-fill continuous dates (e.g., last 7 or 30 days) to prevent chart gaps
+                    
+                    # Generate EXACT dates to avoid mismatch
                     for i in range(days - 1, -1, -1):
-                        date_str = (today - timedelta(days=i)).strftime('%Y-%m-%d')
-                        trend_data[date_str] = 0
+                        curr_dt = today - timedelta(days=i)
                         
+                        trend_data['dates'].append(curr_dt.strftime('%Y-%m-%d'))
+                        trend_data['current'].append(0)
+                        trend_data['previous'].append(0)
+                        
+                    # 1. Query current period
                     cursor.execute(f"""
                         SELECT DATE(order_date) as dt, COUNT(order_id) as count
                         FROM orders
-                        WHERE order_date >= date('now', '-{days} days')
+                        WHERE DATE(order_date) >= ? 
                         GROUP BY DATE(order_date)
-                        ORDER BY dt ASC
-                    """)
+                    """, (trend_data['dates'][0],))
+                    
                     for row in cursor.fetchall():
-                        if row['dt'] in trend_data:
-                            trend_data[row['dt']] = row['count']
+                        if row['dt'] in trend_data['dates']:
+                            idx = trend_data['dates'].index(row['dt'])
+                            trend_data['current'][idx] = row['count']
                             
-                elif filter_type == "this_year":
-                    # Pre-fill last 12 calendar months (YYYY-MM)
-                    for i in range(11, -1, -1):
-                        m = today.month - i
-                        y = today.year
-                        while m <= 0:
-                            m += 12
-                            y -= 1
-                        month_str = f"{y}-{m:02d}"
-                        trend_data[month_str] = 0
+                    # 2. Query previous period
+                    prev_start = (today - timedelta(days=days*2 - 1)).strftime('%Y-%m-%d')
+                    prev_end = (today - timedelta(days=days)).strftime('%Y-%m-%d')
+                    
+                    cursor.execute(f"""
+                        SELECT DATE(order_date) as dt, COUNT(order_id) as count
+                        FROM orders
+                        WHERE DATE(order_date) >= ? AND DATE(order_date) <= ?
+                        GROUP BY DATE(order_date)
+                    """, (prev_start, prev_end))
+                    
+                    for row in cursor.fetchall():
+                        # Shift the old date forward to match the current X-axis index
+                        row_dt = datetime.strptime(row['dt'], '%Y-%m-%d')
+                        mapped_dt = (row_dt + timedelta(days=days)).strftime('%Y-%m-%d')
                         
+                        if mapped_dt in trend_data['dates']:
+                            idx = trend_data['dates'].index(mapped_dt)
+                            trend_data['previous'][idx] = row['count']
+
+                elif filter_type == "this_year":
+                    for i in range(11, -1, -1):
+                        curr_m = today.month - i
+                        curr_y = today.year
+                        while curr_m <= 0:
+                            curr_m += 12
+                            curr_y -= 1
+                        trend_data['dates'].append(f"{curr_y}-{curr_m:02d}")
+                        trend_data['current'].append(0)
+                        trend_data['previous'].append(0)
+                        
+                    # 1. Query current year
                     cursor.execute("""
                         SELECT strftime('%Y-%m', order_date) as dt, COUNT(order_id) as count
                         FROM orders
                         WHERE order_date >= date('now', '-1 year')
                         GROUP BY dt
-                        ORDER BY dt ASC
                     """)
                     for row in cursor.fetchall():
-                        if row['dt'] in trend_data:
-                            trend_data[row['dt']] = row['count']
+                        if row['dt'] in trend_data['dates']:
+                            idx = trend_data['dates'].index(row['dt'])
+                            trend_data['current'][idx] = row['count']
+                            
+                    # 2. Query previous year
+                    cursor.execute("""
+                        SELECT strftime('%Y-%m', order_date) as dt, COUNT(order_id) as count
+                        FROM orders
+                        WHERE order_date >= date('now', '-2 years') 
+                        AND order_date < date('now', '-1 year')
+                        GROUP BY dt
+                    """)
+                    for row in cursor.fetchall():
+                        # Shift the old year forward to match the current X-axis index
+                        y, m = map(int, row['dt'].split('-'))
+                        mapped_dt = f"{y + 1}-{m:02d}"
+                        
+                        if mapped_dt in trend_data['dates']:
+                            idx = trend_data['dates'].index(mapped_dt)
+                            trend_data['previous'][idx] = row['count']
                             
         except Exception as e:
             print(f"Error fetching order trend data: {e}")
