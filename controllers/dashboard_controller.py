@@ -30,16 +30,12 @@ class DashboardController:
                     if status in counts:
                         counts[status] = row['count']
                 
-                # 2. Fetch SHIPPED orders ONLY from the latest date that has any shipped orders
+                # 2. Fetch SHIPPED orders ONLY from today
                 cursor.execute("""
                     SELECT COUNT(order_id) as count 
                     FROM orders 
                     WHERE status_code = 'SHIPPED' 
-                    AND DATE(order_date) = (
-                        SELECT MAX(DATE(order_date)) 
-                        FROM orders 
-                        WHERE status_code = 'SHIPPED'
-                    )
+                    AND DATE(order_date) = CURRENT_DATE
                 """)
                 shipped_row = cursor.fetchone()
                 if shipped_row and shipped_row['count']:
