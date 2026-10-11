@@ -1,13 +1,75 @@
 {
-    "paths": {
-        "database": "warehouse.db",
-        "imports_folder": "imports/",
-        "exports_folder": "exports/",
-        "invoices_folder": "invoices/"
+    "localization": {
+        "language": "en",
+        "currency": "PLN",
+        "date_format": "YYYY-MM-DD",
+        "timezone": "Europe/Warsaw"
     },
     "appearance": {
-        "language": "en",
-        "theme": "modern",
-        "display_mode": "windowed"
+        "theme": "light",
+        "font_size": "large",
+        "notifications": {
+            "show_toasts": true,
+            "play_sound": false
+        }
+    },
+    "paths": {
+        "database": "warehouse.db",
+        "default_export_dir": "Exports",
+        "default_import_dir": "Imports",
+        "database_backup_dir": "Backups",
+        "templates_dir": "Templates",
+        "backups": "C:/WMS/Backups",
+        "exports_invoices": "C:/WMS/Exports/Invoices",
+        "exports_pick_lists": "C:/WMS/Exports/PickLists",
+        "imports_default": "C:/Users/Public/Downloads",
+        "templates": {
+            "base_dir": "C:/WMS/Templates",
+            "invoice": "invoice_template.html",
+            "email": "email_template.html",
+            "pick_list": "pick_list_template.html",
+            "import_schema": "import_schema.csv"
+        }
+    },
+    "system": {
+        "default_dashboard_filter": "7_days",
+        "auto_backup_on_exit": true,
+        "notifications": {
+            "show_toasts": true,
+            "play_sound": true
+        },
+        "low_stock_warning_threshold": 10,
+        "default_printer": ""
+    },
+    "company": {
+        "name": "",
+        "nip": "",
+        "address": "",
+        "email": "",
+        "phone": "",
+        "smtp_key": ""
+    },
+    "company_info": {
+        "name": "WMS-Logistics Sp. z o.o.",
+        "tax_id": "PL1234567890",
+        "street": "ul. Magazynowa 15, 42-200 Częstochowa, 42-200 Częstochowa, 42-200 Częstochowa",
+        "postal_code": "42-200",
+        "city": "Częstochowa",
+        "country": "Polska",
+        "bank_account": "PL 00 0000 0000 0000 0000 0000 0000",
+        "phone": "+48 123 456 789",
+        "email": "biuro@wms-logistics.pl"
+    },
+    "email_smtp": {
+        "server": "smtp.gmail.com",
+        "port": 587,
+        "sender_email": "system@wms-logistics.pl",
+        "smtp_key": "",
+        "use_tls": true
+    },
+    "default_filters": {
+        "dashboard_time": "",
+        "orders_status": "",
+        "orders_date_range": ""
     }
 }
