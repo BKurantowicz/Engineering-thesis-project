@@ -10,20 +10,23 @@ from PySide6.QtCore import Qt
 from models.database import DatabaseManager
 from utils.translations import translator
 from views.orders.orders_view import OrdersView
+from controllers.dashboard_controller import DashboardController
+from views.dashboard.dashboard_view import DashboardView
 
 class MainWindow(QMainWindow):
     """Main application window acting as the router/container for all views."""
     def __init__(self, config, translator):
         super().__init__()
         self.config = config
+        self.translator = translator # Zapamiętujemy cały obiekt translatora dla widoków
         self.t = translator.t  # Shortcut to translation function
         
-        # Capture lang_code from config to pass to child views
-        self.lang_code = self.config.get("appearance", {}).get("language", "pl")
+        # Capture lang_code from config using strict keys (will raise KeyError if missing)
+        self.lang_code = self.config["appearance"]["language"]
         
-        # Initialize database manager
-        db_path = self.config.get("paths", {}).get("database", "warehouse.db")
-        self.db = DatabaseManager(db_path)
+        # Initialize database manager (will raise KeyError if paths/database is missing)
+        self.db_path = self.config["paths"]["database"]
+        self.db = DatabaseManager(self.db_path)
 
         # Set window title using translation dictionary
         self.setWindowTitle(self.t("app_title"))
@@ -120,8 +123,12 @@ class MainWindow(QMainWindow):
         """Sets up the central stacked widget for switching views."""
         self.stacked_widget = QStackedWidget()
         
-        # Temporary placeholder views 
-        self.view_dashboard = QLabel(f"<h2>{self.t('menu_dashboard')}</h2>")
+        # Initialize Dashboard Controller and View
+        self.dashboard_ctrl = DashboardController(db_path=self.db_path)
+        self.view_dashboard = DashboardView(translator=self.translator, controller=self.dashboard_ctrl)
+        
+        # Zastępuje mocki prawdziwymi danymi z bazy od razu po utworzeniu interfejsu
+        self.view_dashboard.load_real_data()
         
         # Pass self.lang_code instead of undefined lang_code
         self.view_orders = OrdersView(self.lang_code)
@@ -141,21 +148,20 @@ class MainWindow(QMainWindow):
 
 def load_config():
     """Loads application configuration from the root config.json file."""
-    try:
-        with open('config.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print("Warning: config.json not found! Falling back to defaults.")
-        return {"appearance": {"language": "pl"}}
+    # Brak bloku try-except. Jeśli plik nie istnieje, wywali FileNotFoundError.
+    with open('config.json', 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 
 if __name__ == "__main__":
     # Initialize Qt Application instance
     app = QApplication(sys.argv)
     
-    # Load configuration and language translator prior to UI rendering
+    # Load configuration
     config = load_config()
-    lang_code = config.get("appearance", {}).get("language", "pl")
+    
+    # Strict key access - will raise KeyError if the config structure is invalid
+    lang_code = config["appearance"]["language"]
     
     # Matching the variable name properly
     lang_translator = translator(lang_code, "translations_main.json")
