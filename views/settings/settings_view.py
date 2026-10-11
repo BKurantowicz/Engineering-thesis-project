@@ -378,8 +378,16 @@ class SettingsView(QWidget):
         success = self.controller.save_config(config)
         
         if success:
+            from PySide6.QtWidgets import QApplication
+            from utils.theme_manager import ThemeManager
+            app = QApplication.instance()
+            if app:
+                new_css = ThemeManager.get_stylesheet(config["appearance"]["theme"], config["appearance"]["font_size"])
+                app.setStyleSheet(new_css)
+
+        if success:
             QMessageBox.information(
                 self, 
                 self.translator.t("settings_saved_title", "Settings Saved"),
-                self.translator.t("settings_saved_msg", "Configuration saved.\nPlease restart the application to fully apply language changes.")
+                self.translator.t("settings_saved_msg", "Configuration saved.\n(Language changes still require a restart).")
             )

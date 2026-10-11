@@ -7,7 +7,7 @@
     },
     "appearance": {
         "theme": "light",
-        "font_size": "large",
+        "font_size": "medium",
         "notifications": {
             "show_toasts": true,
             "play_sound": false
@@ -52,7 +52,7 @@
     "company_info": {
         "name": "WMS-Logistics Sp. z o.o.",
         "tax_id": "PL1234567890",
-        "street": "ul. Magazynowa 15, 42-200 Częstochowa, 42-200 Częstochowa, 42-200 Częstochowa",
+        "street": "ul. Magazynowa 15, 42-200 Częstochowa, 42-200 Częstochowa, 42-200 Częstochowa, 42-200 Częstochowa, 42-200 Częstochowa, 42-200 Częstochowa, 42-200 Częstochowa",
         "postal_code": "42-200",
         "city": "Częstochowa",
         "country": "Polska",

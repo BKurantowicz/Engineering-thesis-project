@@ -15,6 +15,7 @@ from controllers.dashboard_controller import DashboardController
 from views.dashboard.dashboard_view import DashboardView
 from views.settings.settings_view import SettingsView
 from controllers.settings_controller import SettingsController
+from utils.theme_manager import ThemeManager
 
 class MainWindow(QMainWindow):
     """Main application window acting as the router/container for all views."""
@@ -165,13 +166,18 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     
     config = load_config()
-    
-    # Safely retrieve language code with fallback
-    lang_code = config.get("localization", {}).get("language", "en")
-    
+    lang_code = config.get("localization", {}).get("language", "pl")
     lang_translator = translator(lang_code, "utils")
     
     window = MainWindow(config, lang_translator)
-    window.show()
     
+    # --- NOWY KOD DO MOTYWÓW ---
+    theme_name = config.get("appearance", {}).get("theme", "dark")
+    font_size = config.get("appearance", {}).get("font_size", "medium")
+    
+    # Nanosimy arkusz stylów na całą aplikację!
+    app.setStyleSheet(ThemeManager.get_stylesheet(theme_name, font_size))
+    # ---------------------------
+    
+    window.show()
     sys.exit(app.exec())
