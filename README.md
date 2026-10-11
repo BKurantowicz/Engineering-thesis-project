@@ -8,47 +8,148 @@ The application is built with a focus on usability and supports bilingual interf
 
 ## 🚀 Key Features
 
-* **Order Management:** Add, delete, modify, and manage user orders seamlessly.
+- **Order Management:** Add, delete, modify, and manage user orders seamlessly.
 
-* **Invoicing:** Generate and manage invoices independently of customer profiles (supporting B2B/company details and separate billing addresses).
+- **Invoicing:** Generate and manage invoices independently of customer profiles (supporting B2B/company details and separate billing addresses).
 
-* **Data Import:** Built-in tools to import external orders directly into the database.
+- **Data Import:** Built-in tools to import external orders directly into the database.
 
-* **Warehouse Control:** Track inventory levels, product locations (shelves/racks), and pick lists.
+- **Warehouse Control:** Track inventory levels, product locations (shelves/racks), and pick lists.
 
-* **Analytics & Statistics:** View detailed statistics regarding sales, top products, and overall business performance.
+- **Analytics & Statistics:** View detailed statistics regarding sales, top products, and overall business performance.
 
-* **Bilingual Support:** Database architecture designed to support multiple languages natively.
+- **Bilingual Support:** Database architecture designed to support multiple languages natively.
 
 ## 🛠️ Technology Stack
 
-* **Language:** Python 3
+- **Language:** Python 3
 
-* **GUI Framework:** PySide6 (Qt for Python) - ensuring a fast, responsive, and native desktop experience.
+- **GUI Framework:** PySide6 (Qt for Python) - ensuring a fast, responsive, and native desktop experience.
 
-* **Database:** SQLite3 - lightweight, serverless, and robust internal database.
+- **Database:** SQLite3 - lightweight, serverless, and robust internal database.
 
-* **Configuration:** JSON - used for local application settings, paths, and user preferences.
+- **Configuration:** JSON - used for local application settings, paths, and user preferences.
 
 ## 📸 UI Preview / Screenshots
 
-* **Orders Dashboard:** `![Orders View](link_to_image.png)`
-* **Dark Theme Interface:** `![Dark Theme](link_to_image.png)`
+- **Orders Dashboard:** `![Orders View](link_to_image.png)`
+- **Dark Theme Interface:** `![Dark Theme](link_to_image.png)`
 
 📦 WMS-Project<br>
  ┣ 📂 models             # SQLite database manager and models <br>
  ┣ 📂 utils              # Helpers (e.g., i18n JSON Translator) <br>
+    ┗ 📜 translations_*.json # Feature-based language dictionaries <br>
+    ┣ 📜 translations.py            # Handles multi-language translation loading for specific modules <br>
  ┣ 📂 views              # PySide6 UI views (Dashboard, Orders, Products) <br>
  ┣ 📜 main.py            # Main application router and window <br>
  ┣ 📜 seed_db.py         # Faker script for generating test data <br>
- ┣ 📜 config.json        # Local app configuration and styling paths <br>
- ┗ 📜 translations_*.json # Feature-based language dictionaries
+ ┣ 📜 config.json        # Local app configuration and styling paths
 
 ## 🏛️ System Architecture (UML Class Diagram)
 
-The application utilizes a strictly typed, component-based MVC architecture. Below is the UML representation of the core application flow, highlighting the decoupling of PySide6 Views from SQLite Business Logic.
+The application utilizes a strictly typed, component-based MVC architecture. Below is the UML representation of the core application flow, highlighting the decoupling of PySide6 Views from SQLite Business Logic. 
+`MainWindow` acts as the central router, instantiating and holding the sub-views.
 
-![MVC.jpg](Images/MVC.jpg)
+```mermaid
+classDiagram
+    %% CORE APP
+    class MainApp {
+        -config: dict
+        -lang_code: string
+        +main() int
+    }
+
+    class MainWindow {
+        -view_orders: OrdersView
+        -view_dashboard: DashboardView
+        -translator: translator
+        +setup_content_area() void
+        +change_view(view_name: string) void
+    }
+
+    class translator {
+        -lang_code: string
+        -translations: dict
+        +t(key: string) string
+    }
+
+    class DatabaseManager {
+        -db_path: string
+        +initialize_database() void
+        +get_connection() Connection
+    }
+
+    %% DASHBOARD MODULE
+    class DashboardView {
+        -controller: DashboardController
+        -translator: translator
+        -trend_chart: QChart
+        -capacity_chart: QChart
+        -status_chart: QChart
+        +setup_ui() void
+        +load_real_data() void
+        +update_trend_chart(filter_type: string) void
+    }
+
+    class DashboardController {
+        -db_path: string
+        +get_order_status_counts() dict
+        +get_warehouse_capacity() dict
+        +get_order_trend(filter_type: string) dict
+    }
+
+    %% ORDERS MODULE
+    class OrdersView {
+        -controller: OrderController
+        -translator: translator
+        -scroll_layout: QVBoxLayout
+        +load_orders() void
+        +filter_orders_in_memory() void
+    }
+
+    class OrderAccordionItem {
+        -order_id_str: string
+        -summary_row: ClickableRow
+        -details_panel: QFrame
+        +__init__(order_data, translator, controller)
+    }
+
+    class ClickableRow {
+        -is_expanded: bool
+        -details_panel: QFrame
+        +set_details_panel(panel: QFrame) void
+        +mousePressEvent(event: QEvent) void
+    }
+
+    class OrderController {
+        -db_path: string
+        +get_orders(limit: int, date_filter: string) list
+        +get_order_items(order_id: int) list
+    }
+
+    %% RELATIONSHIPS (Main flow)
+    MainApp --> MainWindow : instantiates
+    MainApp --> DatabaseManager : configures path
+    
+    %% Aggregations (hollow diamond)
+    MainWindow o-- translator
+    DashboardView o-- translator
+    OrdersView o-- translator
+    
+    DashboardView o-- DashboardController
+    OrdersView o-- OrderController
+
+    %% Compositions (filled diamond)
+    MainWindow *-- DashboardView
+    MainWindow *-- OrdersView
+    
+    OrdersView *-- OrderAccordionItem
+    OrderAccordionItem *-- ClickableRow
+
+    %% Dependencies (dashed arrow)
+    DashboardController ..> DatabaseManager : connects to SQLite
+    OrderController ..> DatabaseManager : connects to SQLite
+```
 
 ### Architecture Notes:
 - **Separation of Concerns:** UI classes (`OrdersView`, `OrderAccordionItem`) never execute SQL. They delegate all data retrieval to the `OrderController`.
