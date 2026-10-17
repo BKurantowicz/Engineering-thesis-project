@@ -202,48 +202,61 @@ Below is the Entity-Relationship Diagram (ERD) mapping the core structure of the
 erDiagram
     %% CORE TABLES %%
     USERS {
-        int id PK
+        int user_id PK
         string username
         string password_hash
+        string first_name
+        string last_name
         string role
     }
     CUSTOMERS {
-        int id PK
+        int customer_id PK
         string first_name
         string last_name
         string email
-        string phone
+        string street
+        string postal_code
+        string city
+        datetime created_at
     }
     PRODUCTS {
-        int id PK
+        int product_id PK
         string sku
-        string base_name
-        float default_price
+        string name_pl
+        string name_en
+        string desc_pl
+        string desc_en
+        float price
+        float weight
+        float length
+        float width
+        float height
     }
 
     %% WAREHOUSE MODULE %%
-    WAREHOUSE_SHELVES {
-        int id PK
-        string shelf_code "e.g., A1-01"
+    LOCATIONS {
+        int location_id PK
+        string location_code "e.g., A1-01"
+        float max_weight
+        float max_volume
     }
     INVENTORY {
-        int id PK
-        int product_id FK
-        int shelf_id FK
+        int product_id PK, FK
+        int location_id PK, FK
         int quantity
     }
     INVENTORY_TRANSACTIONS {
-        int id PK
+        int transaction_id PK
         int product_id FK
-        int shelf_id FK
+        int location_id FK
         int user_id FK
         int quantity_change "e.g., -2 or +10"
         string transaction_type "e.g., PICK, RESTOCK"
         datetime created_at
     }
     PICK_LISTS {
-        int id PK
-        string status "e.g., PENDING, PICKING"
+        int pick_list_id PK
+        string status "e.g., PENDING"
         int assigned_user_id FK
         datetime created_at
     }
@@ -254,49 +267,59 @@ erDiagram
 
     %% ORDER & INVOICE MODULE %%
     ORDERS {
-        int id PK
+        int order_id PK
         int customer_id FK
-        int status_id FK
+        string status_code FK
         int payment_method_id FK
-        int shipping_type_id FK
-        datetime created_at
+        int created_by FK
+        datetime order_date
         float total_amount
+        string delivery_name
+        string delivery_second_name
+        string delivery_street
+        string delivery_postal_code
+        string delivery_city
     }
     ORDER_ITEMS {
-        int id PK
+        int item_id PK
         int order_id FK
         int product_id FK
         int quantity
         float unit_price
     }
     ORDER_SHIPMENTS {
-        int id PK
+        int shipment_id PK
         int order_id FK
         int shipping_type_id FK
-        string package_code
+        string package_code FK
         string tracking_number
         float final_shipping_cost
     }
     INVOICES {
-        int id PK
+        int invoice_id PK
         int order_id FK
         string invoice_number
-        string buyer_name "Person or Company Name"
-        string tax_id "NIP (optional)"
-        string address
+        string company_name
+        string tax_id
+        string billing_name
+        string billing_second_name
+        string billing_street
+        string billing_postal_code
+        string billing_city
         datetime issue_date
     }
 
     %% DICTIONARY TABLES (BILINGUAL SUPPORT) %%
     DICT_ORDER_STATUSES {
-        int id PK
+        string status_code PK
         string name_pl "e.g., Nowe"
         string name_en "e.g., New"
     }
-    DICT_SHIPPING_TYPES {
-        int id PK
-        string name_pl "e.g., Kurier"
-        string name_en "e.g., Courier"
+    DICT_SHIPPING_METHODS {
+        int shipping_id PK
+        string carrier_name "e.g., InPost"
+        string service_name_pl "e.g., Paczkomat"
+        string service_name_en "e.g., Parcel Locker"
     }
     DICT_PAYMENT_METHODS {
         int id PK
@@ -308,38 +331,41 @@ erDiagram
         string name_pl
         string name_en
         float max_weight
+        float max_length
+        float max_width
+        float max_height
         float base_cost
     }
 
-    %% --- RELATIONSHIPS (Reordered for better DAG layout) --- %%
+    %% --- RELATIONSHIPS --- %%
 
-    %% 1. Core Order Flow (Center)
+    %% 1. Core Order Flow
     CUSTOMERS ||--o{ ORDERS : "places"
     ORDERS ||--|{ ORDER_ITEMS : "contains"
     PRODUCTS ||--o{ ORDER_ITEMS : "is part of"
     
-    %% 2. Order Fulfillment & Finance (Bottom/Right)
+    %% 2. Order Fulfillment & Finance
     ORDERS ||--o| INVOICES : "generates"
     ORDERS ||--o| ORDER_SHIPMENTS : "shipped via"
     ORDERS ||--o{ PICK_LIST_ORDERS : "assigned to"
     PICK_LISTS ||--|{ PICK_LIST_ORDERS : "contains"
     
-    %% 3. Inventory & Warehouse (Left/Top)
+    %% 3. Inventory & Warehouse
     PRODUCTS ||--o{ INVENTORY : "has stock in"
-    WAREHOUSE_SHELVES ||--o{ INVENTORY : "stores"
+    LOCATIONS ||--o{ INVENTORY : "stores"
     PRODUCTS ||--o{ INVENTORY_TRANSACTIONS : "involved in"
-    WAREHOUSE_SHELVES ||--o{ INVENTORY_TRANSACTIONS : "location of"
+    LOCATIONS ||--o{ INVENTORY_TRANSACTIONS : "location of"
     
-    %% 4. User Actions (Top)
+    %% 4. User Actions
     USERS ||--o{ INVENTORY_TRANSACTIONS : "performs"
     USERS ||--o{ PICK_LISTS : "assigned to"
+    USERS ||--o{ ORDERS : "created by"
 
-    %% 5. Dictionaries (Pushed to the edges)
-    ORDERS }o--|| DICT_ORDER_STATUSES : "has status"
-    ORDERS }o--|| DICT_SHIPPING_TYPES : "uses shipping"
-    ORDERS }o--|| DICT_PAYMENT_METHODS : "uses payment"
-    ORDER_SHIPMENTS }o--|| DICT_SHIPPING_TYPES : "uses service"
-    ORDER_SHIPMENTS }o--|| DICT_PACKAGE_TYPES : "uses package"
+    %% 5. Dictionaries
+    DICT_ORDER_STATUSES ||--o{ ORDERS : "defines status"
+    DICT_PAYMENT_METHODS ||--o{ ORDERS : "defines payment"
+    DICT_SHIPPING_METHODS ||--o{ ORDER_SHIPMENTS : "defines carrier"
+    DICT_PACKAGE_TYPES ||--o{ ORDER_SHIPMENTS : "defines package size"
 
 ```
 
