@@ -7,8 +7,8 @@ class OrderController:
 
     def get_orders(self, limit=50, date_filter="", search_term="", sort_by="date_desc"):
         """
-        Pobiera listę zamówień z bazy, uwzględniając filtry dat, wyszukiwanie tekstowe
-        oraz nowe kolumny adresowe z PR 1.
+        Fetches a list of orders from the database, applying date filters, 
+        text search, and including the new address columns introduced in PR 1.
         """
         limit = limit if limit is not None else 50
         date_filter = str(date_filter) if date_filter is not None else ""
@@ -39,7 +39,7 @@ class OrderController:
         params = []
         now = datetime.now()
 
-        # --- FILTROWANIE DAT ---
+        # --- DATE FILTERING ---
         if date_filter == "last_7":
             query += " AND o.order_date >= ?"
             params.append((now - timedelta(days=7)).strftime('%Y-%m-%d'))
@@ -67,7 +67,7 @@ class OrderController:
             query += " AND o.order_date LIKE ?"
             params.append(f"{year}-%")
 
-        # --- WYSZUKIWANIE TEKSTOWE (NOWE ADRESY I NAZWISKA) ---
+        # --- TEXT SEARCH (ADDRESSES AND NAMES) ---
         if search_term:
             query += """ AND (
                 c.first_name LIKE ? OR 
@@ -80,7 +80,7 @@ class OrderController:
             wildcard = f"%{search_term}%"
             params.extend([wildcard] * 6)
 
-        # --- SORTOWANIE ---
+        # --- SORTING ---
         if sort_by == "date_desc":
             query += " ORDER BY o.order_date DESC"
         elif sort_by == "date_asc":
@@ -100,14 +100,14 @@ class OrderController:
             params.append(limit)
 
         with sqlite3.connect(self.db_path) as conn:
-            # Używamy sqlite3.Row, aby GUI mogło odwoływać się po nazwach kolumn
+            # Enable sqlite3.Row to allow UI components to access data by column names
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute(query, params)
             return cursor.fetchall()
 
     def get_order_items(self, order_id):
-        """Pobiera pozycje przypisane do danego zamówienia."""
+        """Fetches items associated with a specific order."""
         query = """
             SELECT p.sku, p.name_pl, oi.quantity, oi.unit_price, p.weight
             FROM order_items oi
@@ -122,8 +122,8 @@ class OrderController:
 
     def add_order(self, customer_id, payment_method_id, created_by, total_amount, delivery_data):
         """
-        Tworzy nowe zamówienie wraz z pełnym adresem dostawy.
-        delivery_data: dict z kluczami 'name', 'second_name', 'street', 'postal_code', 'city'
+        Creates a new order including the full delivery address.
+        delivery_data: dict containing keys 'name', 'second_name', 'street', 'postal_code', 'city'
         """
         query = """
             INSERT INTO orders (
