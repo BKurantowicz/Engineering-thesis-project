@@ -161,6 +161,9 @@ class DatabaseManager:
                     created_by INTEGER,
                     order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
                     total_amount REAL DEFAULT 0.0,
+                    delivery_street TEXT,
+                    delivery_postal_code TEXT,
+                    delivery_city TEXT,
                     FOREIGN KEY(customer_id) REFERENCES customers(customer_id),
                     FOREIGN KEY(status_code) REFERENCES dict_order_statuses(status_code),
                     FOREIGN KEY(payment_method_id) REFERENCES dict_payment_methods(id),
@@ -201,8 +204,24 @@ class DatabaseManager:
                     invoice_number TEXT UNIQUE NOT NULL,
                     company_name TEXT,
                     tax_id TEXT,
+                    billing_street TEXT,
+                    billing_postal_code TEXT,
+                    billing_city TEXT,
                     issue_date DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(order_id) REFERENCES orders(order_id)
+                )
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS packages (
+                    package_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    order_id INTEGER NOT NULL,
+                    package_code TEXT NOT NULL,
+                    tracking_number TEXT UNIQUE,
+                    actual_weight REAL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(order_id) REFERENCES orders(order_id),
+                    FOREIGN KEY(package_code) REFERENCES dict_package_types(package_code)
                 )
             """)
 
