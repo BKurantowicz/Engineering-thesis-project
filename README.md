@@ -32,6 +32,33 @@ The application is built with a focus on usability and supports bilingual interf
 
 - **Configuration:** JSON - used for local application settings, paths, and user preferences.
 
+## Company Settings
+
+In **Settings > Company Data**, the company address is edited in separate
+**Street**, **Postal Code**, and **City** fields. These map directly to the existing
+`company_info.street`, `company_info.postal_code`, and `company_info.city` JSON
+keys. Saving and reopening settings preserves each component independently.
+The labels are available in English and Polish, within the existing four-page
+Settings layout.
+
+If an older configuration contains duplicated address text, correct the affected
+field explicitly and save. Existing text is displayed as stored; the application
+does not guess which parts to remove. No configuration migration is required.
+
+### Settings Regression Tests
+
+With Python 3 and PySide6 installed, run from the repository root:
+
+```text
+python -B -m unittest discover -s tests -v
+```
+
+The tests use temporary JSON configuration files and Qt's offscreen platform by
+default. They do not open the application's database or modify its configuration.
+They cover repeated save/reopen cycles, individual component edits, explicit
+correction of existing text, and address fields in both languages and all three
+themes and font sizes. Change history is recorded in [updates.md](updates.md).
+
 ## 📸 UI Preview / Screenshots
 
 - **Orders Dashboard:** `![Orders View](link_to_image.png)`

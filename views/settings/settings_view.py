@@ -205,7 +205,9 @@ class SettingsView(QWidget):
         
         self.comp_name = QLineEdit()
         self.comp_nip = QLineEdit()
-        self.comp_address = QLineEdit()
+        self.comp_street = QLineEdit()
+        self.comp_postal_code = QLineEdit()
+        self.comp_city = QLineEdit()
         self.comp_email = QLineEdit()
         self.comp_phone = QLineEdit()
         self.smtp_key = QLineEdit()
@@ -213,14 +215,16 @@ class SettingsView(QWidget):
         
         self._add_form_row(grid, 0, self.translator.t("comp_name", "Company Name:"), self.comp_name)
         self._add_form_row(grid, 1, self.translator.t("comp_nip", "Tax ID (NIP):"), self.comp_nip)
-        self._add_form_row(grid, 2, self.translator.t("comp_addr", "Address:"), self.comp_address)
-        self._add_form_row(grid, 3, self.translator.t("comp_email", "Email Address:"), self.comp_email)
-        self._add_form_row(grid, 4, self.translator.t("comp_phone", "Phone Number:"), self.comp_phone)
+        self._add_form_row(grid, 2, self.translator.t("comp_street", "Street:"), self.comp_street)
+        self._add_form_row(grid, 3, self.translator.t("comp_postal_code", "Postal Code:"), self.comp_postal_code)
+        self._add_form_row(grid, 4, self.translator.t("comp_city", "City:"), self.comp_city)
+        self._add_form_row(grid, 5, self.translator.t("comp_email", "Email Address:"), self.comp_email)
+        self._add_form_row(grid, 6, self.translator.t("comp_phone", "Phone Number:"), self.comp_phone)
         
         lbl_smtp = QLabel(self.translator.t("comp_smtp", "SMTP Mail Key:"))
         lbl_smtp.setStyleSheet("margin-top: 15px; color: #feca57;") # Wyróżnienie sekcji wrażliwej
-        grid.addWidget(lbl_smtp, 5, 0)
-        grid.addWidget(self.smtp_key, 5, 1)
+        grid.addWidget(lbl_smtp, 7, 0)
+        grid.addWidget(self.smtp_key, 7, 1)
 
         layout.addWidget(card)
         layout.addStretch()
@@ -302,12 +306,9 @@ class SettingsView(QWidget):
         self.comp_name.setText(company.get("name", ""))
         self.comp_nip.setText(company.get("tax_id", ""))
         
-        # Combine street, postal code, and city into one address field
-        street = company.get("street", "")
-        postal = company.get("postal_code", "")
-        city = company.get("city", "")
-        full_address = f"{street}, {postal} {city}".strip(", ")
-        self.comp_address.setText(full_address)
+        self.comp_street.setText(company.get("street", ""))
+        self.comp_postal_code.setText(company.get("postal_code", ""))
+        self.comp_city.setText(company.get("city", ""))
         
         self.comp_email.setText(company.get("email", ""))
         self.comp_phone.setText(company.get("phone", ""))
@@ -355,7 +356,9 @@ class SettingsView(QWidget):
         if "company_info" not in config: config["company_info"] = {}
         config["company_info"]["name"] = self.comp_name.text()
         config["company_info"]["tax_id"] = self.comp_nip.text()
-        config["company_info"]["street"] = self.comp_address.text() 
+        config["company_info"]["street"] = self.comp_street.text()
+        config["company_info"]["postal_code"] = self.comp_postal_code.text()
+        config["company_info"]["city"] = self.comp_city.text()
         config["company_info"]["email"] = self.comp_email.text()
         config["company_info"]["phone"] = self.comp_phone.text()
         
