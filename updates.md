@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### 2026-10-25 — Clean-checkout database import (US-BASE-01, #22)
+
+- Rename the tracked `Models` directory to `models`, matching the existing
+  `models.database` import and documented package layout. Database source and
+  initialization behavior remain unchanged.
+- Add regression coverage for Git-tracked import capitalization, actual entry-point
+  startup with isolated configuration and an empty database, and preservation of
+  existing database records during initialization.
+- Document startup dependencies, the canonical package spelling, and the scope
+  of startup regression checks in `README.md`.
+
 ### 2026-10-21 — Company address persistence (US-17-02, #17)
 
 - Replace the combined company-address input with separate Street, Postal Code,

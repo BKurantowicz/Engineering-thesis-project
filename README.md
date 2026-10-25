@@ -32,6 +32,21 @@ The application is built with a focus on usability and supports bilingual interf
 
 - **Configuration:** JSON - used for local application settings, paths, and user preferences.
 
+## Running from a Checkout
+
+Install Python 3 and PySide6, then run from the repository root:
+
+```text
+python -m pip install PySide6
+python main.py
+```
+
+The database module is tracked as `models/database.py` and imported as
+`models.database`. Keep this lowercase package spelling when adding imports;
+startup does not require directory renaming or Python case-handling overrides.
+Database initialization creates missing tables and leaves existing business
+records intact.
+
 ## Company Settings
 
 In **Settings > Company Data**, the company address is edited in separate
@@ -45,19 +60,26 @@ If an older configuration contains duplicated address text, correct the affected
 field explicitly and save. Existing text is displayed as stored; the application
 does not guess which parts to remove. No configuration migration is required.
 
-### Settings Regression Tests
+### Regression Tests
 
-With Python 3 and PySide6 installed, run from the repository root:
+With Python 3, PySide6, and Git installed, run from the repository root:
 
 ```text
 python -B -m unittest discover -s tests -v
 ```
 
-The tests use temporary JSON configuration files and Qt's offscreen platform by
-default. They do not open the application's database or modify its configuration.
-They cover repeated save/reopen cycles, individual component edits, explicit
-correction of existing text, and address fields in both languages and all three
-themes and font sizes. Change history is recorded in [updates.md](updates.md).
+The tests use temporary configuration and database files and Qt's offscreen
+platform. They do not open the application's database or modify its configuration.
+Startup coverage checks Git-tracked import capitalization, launches the entry
+point from a temporary tree with the exact tracked source paths and an empty
+database, and verifies that database reinitialization preserves existing records.
+The startup fixture uses the default database filename; populated-order rendering
+and custom database-path propagation are separate pending repairs.
+
+Settings coverage includes repeated save/reopen cycles, individual component
+edits, explicit correction of existing text, and address fields in both languages
+and all three themes and font sizes. Change history is recorded in
+[updates.md](updates.md).
 
 ## 📸 UI Preview / Screenshots
 
