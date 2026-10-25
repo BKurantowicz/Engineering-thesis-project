@@ -91,7 +91,11 @@ class OrderAccordionItem(QWidget):
         """)
         
         for row_idx, item in enumerate(items_data):
-            sku, name, qty, gross_price, unit_weight = item
+            sku = item['sku']
+            name = item['name_pl']
+            qty = item['quantity']
+            gross_price = item['unit_price']
+            unit_weight = item['weight']
             net_price = gross_price / 1.23
             total_gross = gross_price * qty
             total_weight = unit_weight * qty
@@ -261,11 +265,15 @@ class OrdersView(QWidget):
         
         orders = self.controller.get_orders(limit=limit, date_filter=date_filter)
         
-        # DODAJ TĘ LINIJKĘ:
-        print(f"---> DEBUG: Downloaded {len(orders)} orders (Limit: {limit}, Data: '{date_filter}')")
-        
         for order in orders:
-            order_id, order_date, status_code, total_amount, first_name, last_name, payment, box_type, tracking = order
+            order_id = order['order_id']
+            order_date = order['order_date']
+            status_code = order['status_code']
+            total_amount = order['total_amount']
+            first_name = order['first_name']
+            last_name = order['last_name']
+            payment = order['payment']
+            box_type = order['package_code']
             net_amount = total_amount / 1.23 
             
             formatted_data = {

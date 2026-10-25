@@ -47,6 +47,16 @@ startup does not require directory renaming or Python case-handling overrides.
 Database initialization creates missing tables and leaves existing business
 records intact.
 
+## Browsing Existing Orders
+
+The Orders overview consumes the controller's named SQLite fields, including
+the current delivery-address columns. Empty and populated order tables can be
+opened, and missing payment or shipment details retain the `-` display default.
+Expanding a row shows that order's item details. Existing date and result-limit
+controls reload the list without accumulating duplicate entries.
+
+Browsing, reloading, and expanding orders do not modify order or inventory data.
+
 ## Company Settings
 
 In **Settings > Company Data**, the company address is edited in separate
@@ -73,8 +83,12 @@ platform. They do not open the application's database or modify its configuratio
 Startup coverage checks Git-tracked import capitalization, launches the entry
 point from a temporary tree with the exact tracked source paths and an empty
 database, and verifies that database reinitialization preserves existing records.
-The startup fixture uses the default database filename; populated-order rendering
-and custom database-path propagation are separate pending repairs.
+The startup fixture uses the default database filename; consistent custom
+database-path propagation remains a separate pending repair.
+
+Order integration tests exercise the real controller with empty and populated
+databases, optional joined data, date/limit reloads, item expansion and MainWindow
+startup. They verify that browsing preserves persisted records.
 
 Settings coverage includes repeated save/reopen cycles, individual component
 edits, explicit correction of existing text, and address fields in both languages

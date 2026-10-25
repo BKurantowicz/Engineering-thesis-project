@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 2026-10-25 — Existing-order row contract (US-BASE-02, #39)
+
+- Read order and item values by their SQLite field names, preventing the
+  nine-value unpacking failure when the controller returns its current 14-column
+  order records. Preserve the existing displayed columns and optional-join defaults.
+- Remove the order-loading debug print and retain the current date/limit controls.
+- Add real controller/view regression coverage for empty and populated lists,
+  item details, repeated reloads, MainWindow startup, and unchanged persisted data.
+- Document the current order-browsing behavior and validation scope in README.
+
 ### 2026-10-25 — Clean-checkout database import (US-BASE-01, #22)
 
 - Rename the tracked `Models` directory to `models`, matching the existing
