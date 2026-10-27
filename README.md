@@ -1,36 +1,65 @@
 # ERP & Warehouse Management System
 
-## 📌 Project Overview
+## Project Overview
 
-This application is an ERP system created to monitor incoming orders and assist with warehouse operations and implementations. It provides a comprehensive set of tools to manage inventory, process shipments, and analyze business performance.
+This engineering thesis project is a Python desktop application for store and
+warehouse operations. The source includes dashboard analytics, an order browser,
+and application settings, together with a SQLite schema for inventory, customers,
+products, picking, shipments, and invoices. Several workflows remain incomplete,
+and the current startup and order-loading limitations are listed below.
 
-The application is built with a focus on usability and supports bilingual interface localization (English and Polish).
+English and Polish translation dictionaries are included. Some existing UI and
+data labels still use fixed-language values. [updates.md](updates.md) records
+change history; this README describes the current application.
 
-## 🚀 Key Features
+## Current Functionality
 
-- **Order Management:** Add, delete, modify, and manage user orders seamlessly.
+- **Dashboard:** Database queries provide order-status counts and order inflow
+  comparisons. The capacity chart uses a provisional unit-count calculation.
+- **Order browser:** The view defines expandable item details, order ID/status
+  and customer-name search, date filters, and result limits. Populated results
+  are currently blocked by the row-contract defect described below.
+- **Settings:** Four pages persist paths, company details, appearance/localization,
+  and system preferences through `SettingsController`.
+- **Appearance:** `ThemeManager` supplies Dark, Light, and Modern palettes and
+  Small, Medium, and Large fonts. Saving appearance settings reapplies the
+  application stylesheet; some local widget styling still overrides it.
+- **Persistence:** Database initialization creates the schema and initial
+  dictionary values. Separate delivery and billing fields are present.
 
-- **Invoicing:** Generate and manage invoices independently of customer profiles (supporting B2B/company details and separate billing addresses).
+### Current Limitations
 
-- **Data Import:** Built-in tools to import external orders directly into the database.
+- Git tracks `Models/database.py`, while application imports use
+  `models.database`. A clean checkout can fail to import the database module.
+- `OrderController.get_orders()` returns 14 named fields, but `OrdersView`
+  unpacks nine positional values. Loading existing orders fails; an empty order
+  table masks the problem.
+- The dashboard uses the configured database path, while `OrdersView` creates
+  its controller with default `warehouse.db`. A nondefault path can therefore
+  show different data or fail when the default database lacks the schema.
+- Products is a placeholder. Customer management and pick-list creation or
+  execution screens are absent. Add/Import and order-detail action buttons do
+  not provide complete workflows. The controller's order-insertion method is
+  not connected to an order-creation form.
+- Invoice, shipment, package, and inventory tables do not establish working
+  invoicing, shipping, stock-movement, or reporting features.
+- Warehouse utilization divides inventory unit count by a fixed capacity of
+  10,000 and estimates “In picking” as 5% of rack usage. It does not measure
+  mass or volume and does not enforce rack limits.
+- Local widget and chart colors do not fully follow theme changes. Language
+  changes require a restart, and localization remains partial.
+- Notification, backup, and path-browse controls do not establish that those
+  operational features are implemented.
 
-- **Warehouse Control:** Track inventory levels, product locations (shelves/racks), and pick lists.
+## Technology Stack
 
-- **Analytics & Statistics:** View detailed statistics regarding sales, top products, and overall business performance.
-
-- **Bilingual Support:** Database architecture designed to support multiple languages natively.
-
-- **Dynamic Configuration & Theming:** Centralized settings module managing system paths, company metadata, and localization. Features a live CSS `ThemeManager` for zero-restart visual switching (Dark, Light, Modern) and scalable UI fonts safely persisted in a recursive JSON structure.
-
-## 🛠️ Technology Stack
-
-- **Language:** Python 3
-
-- **GUI Framework:** PySide6 (Qt for Python) - ensuring a fast, responsive, and native desktop experience.
-
-- **Database:** SQLite3 - lightweight, serverless, and robust internal database.
-
-- **Configuration:** JSON - used for local application settings, paths, and user preferences.
+| Area | Implementation |
+| --- | --- |
+| Language | Python 3 |
+| Desktop interface | PySide6 (Qt for Python, including Qt Charts) |
+| Persistence | Python's `sqlite3` library and local SQLite files |
+| Configuration | JSON |
+| Regression tests | Standard-library `unittest`, temporary configuration, offscreen Qt |
 
 ## Company Settings
 
@@ -59,178 +88,141 @@ They cover repeated save/reopen cycles, individual component edits, explicit
 correction of existing text, and address fields in both languages and all three
 themes and font sizes. Change history is recorded in [updates.md](updates.md).
 
-## 📸 UI Preview / Screenshots
+## Project Structure
 
-- **Orders Dashboard:** `![Orders View](link_to_image.png)`
-- **Dark Theme Interface:** `![Dark Theme](link_to_image.png)`
+```text
+controllers/       Orders, Dashboard, and Settings logic
+Models/database.py Tracked SQLite schema and dictionary initialization
+utils/             Translation loader, JSON dictionaries, and ThemeManager
+views/             Dashboard, Orders, and Settings widgets
+main.py            Application entry point, main window, and navigation
+tests/             Isolated company-settings regression tests
+config.json        Application configuration and preferences
+README.md          Current application state and architecture
+updates.md         Application change history
+```
 
-📦 WMS-Project <br>
- ┣ 📂 controllers        # Business logic managers (Orders, Dashboard, Settings) <br>
- ┣ 📂 models             # SQLite database manager and models <br>
- ┣ 📂 utils              # Helpers (e.g., i18n JSON Translator, ThemeManager) <br>
- ┃ ┣ 📜 translations_*.json # Feature-based language dictionaries <br>
- ┃ ┣ 📜 translations.py  # Handles dynamic glob-based multi-language translation loading <br>
- ┃ ┗ 📜 theme_manager.py # Generates and injects global QSS stylesheets dynamically <br>
- ┣ 📂 views              # PySide6 UI views (Dashboard, Orders, Products, Settings) <br>
- ┣ 📜 main.py            # Main application router and window <br>
- ┣ 📜 seed_db.py         # Faker script for generating test data <br>
- ┗ 📜 config.json        # Local app configuration, safe fallbacks, and user preferences
+Database files and the local `seed_db.py` script are ignored by Git. A fresh clone
+does not include populated demonstration data or that seed script.
 
-## 🏛️ System Architecture (UML Class Diagram)
+## Running the Application
 
-The application utilizes a strictly typed, component-based MVC architecture. Below is the UML representation of the core application flow, highlighting the decoupling of PySide6 Views from SQLite Business Logic. 
-`MainWindow` acts as the central router, instantiating and holding the sub-views.
+Use a Python environment with PySide6 installed and launch from the repository
+root, where relative configuration, database, and translation paths are resolved:
+
+```text
+python main.py
+```
+
+There is no dependency manifest at present. Startup reads `config.json`,
+initializes the configured SQLite schema, loads dictionaries from `utils/`, and
+creates the screens. The import, populated-order, and database-path defects
+listed above currently prevent a reliable clean-checkout launch. Use the
+isolated test command above to validate company settings without opening or
+modifying the working database.
+
+## System Architecture
+
+The application separates PySide6 views from controllers. Module-level code in
+`main.py` loads configuration and translations, applies the theme, and constructs
+`MainWindow`; there is no `MainApp` class. The window connects navigation buttons
+to a `QStackedWidget`: Dashboard, Orders, a Products placeholder, and Settings.
+The simplified diagram lists selected implemented methods and dependencies.
 
 ```mermaid
 classDiagram
     direction TB
-
-    %% --- ENTRY POINT & ROUTER ---
-    class MainApp {
-        -config: dict
-        -lang_code: string
-        +main() int
-    }
-
     class MainWindow {
-        -view_orders: OrdersView
-        -view_dashboard: DashboardView
-        -view_settings: SettingsView
-        -translator: translator
-        +setup_content_area() void
-        +change_view(view_name: string) void
+        +setup_sidebar()
+        +setup_content_area()
     }
-
-    %% --- UTILITIES ---
     class translator {
-        -lang_code: string
-        -translations: dict
-        +load_all_translations(directory: string) void
-        +t(key: string, fallback: string) string
+        +load_all_translations(directory)
+        +t(key, fallback)
     }
-
     class ThemeManager {
-        <<static>>
-        +get_stylesheet(theme_name: string, font_size_name: string) string
+        +get_stylesheet(theme_name, font_size_name)$
     }
-
-    %% --- VIEWS (UI Layer) ---
     class DashboardView {
-        -controller: DashboardController
-        -trend_chart: QChart
-        -capacity_chart: QChart
-        -status_chart: QChart
-        +setup_ui() void
-        +load_real_data() void
-        +update_trend_chart(filter_type: string) void
+        +setup_ui()
+        +load_real_data()
+        +update_trend_chart(filter_type)
     }
-
     class OrdersView {
-        -controller: OrderController
-        -scroll_layout: QVBoxLayout
-        +load_orders() void
-        +filter_orders_in_memory() void
+        +load_orders()
+        +filter_orders_in_memory()
     }
-
     class SettingsView {
-        -controller: SettingsController
-        +setup_ui() void
-        +load_settings() void
-        +save_settings() void
+        +setup_ui()
+        +load_settings()
+        +save_settings()
     }
-
-    class OrderAccordionItem {
-        -order_id_str: string
-        -summary_row: ClickableRow
-        -details_panel: QFrame
-        +__init__(order_data, translator, controller)
-    }
-
+    class OrderAccordionItem
     class ClickableRow {
-        -is_expanded: bool
-        -details_panel: QFrame
-        +set_details_panel(panel: QFrame) void
-        +mousePressEvent(event: QEvent) void
+        +set_details_panel(panel)
+        +mousePressEvent(event)
     }
-
-    %% --- CONTROLLERS (Business Logic Layer) ---
     class DashboardController {
-        -db_path: string
-        +get_order_status_counts() dict
-        +get_warehouse_capacity() dict
-        +get_order_trend(filter_type: string) dict
+        +get_order_status_counts()
+        +get_warehouse_capacity()
+        +get_order_trend(filter_type)
     }
-
     class OrderController {
-        -db_path: string
-        +get_orders(limit: int, date_filter: string) list
-        +get_order_items(order_id: int) list
+        +get_orders(limit, date_filter, search_term, sort_by)
+        +get_order_items(order_id)
+        +add_order(customer_id, payment_method_id, created_by, total_amount, delivery_data)
     }
-
     class SettingsController {
-        -config_path: string
-        -default_config: dict
-        +get_config() dict
-        +save_config(new_config: dict) bool
-        -_merge_configs(default: dict, current: dict) dict
+        +get_config()
+        +save_config(new_config)
+        -_merge_configs(default, current)
     }
-
-    %% --- DATABASE ---
     class DatabaseManager {
-        -db_path: string
-        +initialize_database() void
-        +get_connection() Connection
+        +initialize_database()
+        +get_connection()
     }
-
-    %% ==========================================
-    %% RELATIONSHIPS & ROUTING (Strictly Ordered)
-    %% ==========================================
-
-    %% 1. Application Init
-    MainApp --> MainWindow : instantiates
-    MainApp ..> DatabaseManager : configures path
-    MainApp ..> ThemeManager : loads initial CSS
-
-    %% 2. Global Aggregations
-    MainWindow o-- translator : holds & injects into views
-
-    %% 3. View Compositions (MainWindow owns the Views)
+    class SQLite {
+        <<library>>
+    }
+    class JSON {
+        <<file storage>>
+    }
+    MainWindow --> DatabaseManager : initializes schema
+    MainWindow o-- translator : shares with views
     MainWindow *-- DashboardView
     MainWindow *-- OrdersView
     MainWindow *-- SettingsView
-    
-    %% 4. View Sub-components
     OrdersView *-- OrderAccordionItem
     OrderAccordionItem *-- ClickableRow
-
-    %% 5. View to Controller Links
     DashboardView o-- DashboardController
     OrdersView o-- OrderController
     SettingsView o-- SettingsController
-
-    %% 6. Controller to Database Links
-    DashboardController ..> DatabaseManager : queries
-    OrderController ..> DatabaseManager : queries
-
-    %% 7. Local Triggers
-    SettingsView ..> ThemeManager : updates CSS on save
+    DashboardController ..> SQLite : queries
+    OrderController ..> SQLite : queries and inserts
+    DatabaseManager ..> SQLite : creates schema
+    SettingsController ..> JSON : reads and writes
+    SettingsView ..> ThemeManager : applies stylesheet on save
 ```
 
-### Architecture Notes:
-- **Separation of Concerns:** UI classes (`OrdersView`, `OrderAccordionItem`) never execute SQL. They delegate all data retrieval to the `OrderController`.
-- **Dynamic Instantiation:** `OrdersView` acts as a factory, generating multiple `OrderAccordionItem` instances based on the tuple list returned by the controller.
-- **Composition (*--) vs Aggregation (o--):** The diagram strictly differentiates between widgets that physically own other widgets (if you delete the View, the Accordions are destroyed) versus references to shared utilities like the `translator` or `OrderController`.
+Orders widgets delegate SQL to `OrderController`. The Orders and Dashboard
+controllers each open their own SQLite connections; they do not query through
+`DatabaseManager`. `SettingsController` manages JSON configuration. Widget
+composition describes ownership; it does not imply that every workflow is
+complete or that the current order-row contract is valid.
 
-## 🗄️ Database Architecture
+## Database Architecture
 
-Below is the Entity-Relationship Diagram (ERD) mapping the core structure of the system. Dictionary tables (prefixed with `DICT_`) store names in both Polish (`name_pl`) and English (`name_en`) to natively support bilingual interface requirements.
+The ERD covers all 17 application tables declared in `Models/database.py`.
+`PK`, `FK`, and `UK` identify primary, foreign, and unique keys. Dictionary tables
+provide Polish and English labels; shipping methods use `service_name_pl` and
+`service_name_en` alongside a separate carrier name.
 
 ```mermaid
 erDiagram
     %% CORE TABLES %%
     USERS {
         int user_id PK
-        string username
+        string username UK
         string password_hash
         string first_name
         string last_name
@@ -240,7 +232,7 @@ erDiagram
         int customer_id PK
         string first_name
         string last_name
-        string email
+        string email UK
         string street
         string postal_code
         string city
@@ -248,7 +240,7 @@ erDiagram
     }
     PRODUCTS {
         int product_id PK
-        string sku
+        string sku UK
         string name_pl
         string name_en
         string desc_pl
@@ -263,7 +255,7 @@ erDiagram
     %% WAREHOUSE MODULE %%
     LOCATIONS {
         int location_id PK
-        string location_code "e.g., A1-01"
+        string location_code UK "e.g., A1-01"
         float max_weight
         float max_volume
     }
@@ -325,7 +317,7 @@ erDiagram
     INVOICES {
         int invoice_id PK
         int order_id FK
-        string invoice_number
+        string invoice_number UK
         string company_name
         string tax_id
         string billing_name
@@ -334,6 +326,14 @@ erDiagram
         string billing_postal_code
         string billing_city
         datetime issue_date
+    }
+    PACKAGES {
+        int package_id PK
+        int order_id FK
+        string package_code FK
+        string tracking_number UK
+        float actual_weight
+        datetime created_at
     }
 
     %% DICTIONARY TABLES (BILINGUAL SUPPORT) %%
@@ -367,15 +367,16 @@ erDiagram
     %% --- RELATIONSHIPS --- %%
 
     %% 1. Core Order Flow
-    CUSTOMERS ||--o{ ORDERS : "places"
-    ORDERS ||--|{ ORDER_ITEMS : "contains"
-    PRODUCTS ||--o{ ORDER_ITEMS : "is part of"
+    CUSTOMERS |o--o{ ORDERS : "places"
+    ORDERS |o--o{ ORDER_ITEMS : "contains"
+    PRODUCTS |o--o{ ORDER_ITEMS : "is part of"
     
     %% 2. Order Fulfillment & Finance
-    ORDERS ||--o| INVOICES : "generates"
-    ORDERS ||--o| ORDER_SHIPMENTS : "shipped via"
+    ORDERS |o--o{ INVOICES : "generates"
+    ORDERS ||--o{ ORDER_SHIPMENTS : "shipped via"
+    ORDERS ||--o{ PACKAGES : "has"
     ORDERS ||--o{ PICK_LIST_ORDERS : "assigned to"
-    PICK_LISTS ||--|{ PICK_LIST_ORDERS : "contains"
+    PICK_LISTS ||--o{ PICK_LIST_ORDERS : "contains"
     
     %% 3. Inventory & Warehouse
     PRODUCTS ||--o{ INVENTORY : "has stock in"
@@ -384,20 +385,29 @@ erDiagram
     LOCATIONS ||--o{ INVENTORY_TRANSACTIONS : "location of"
     
     %% 4. User Actions
-    USERS ||--o{ INVENTORY_TRANSACTIONS : "performs"
-    USERS ||--o{ PICK_LISTS : "assigned to"
-    USERS ||--o{ ORDERS : "created by"
+    USERS |o--o{ INVENTORY_TRANSACTIONS : "performs"
+    USERS |o--o{ PICK_LISTS : "assigned to"
+    USERS |o--o{ ORDERS : "created by"
 
     %% 5. Dictionaries
-    DICT_ORDER_STATUSES ||--o{ ORDERS : "defines status"
-    DICT_PAYMENT_METHODS ||--o{ ORDERS : "defines payment"
+    DICT_ORDER_STATUSES |o--o{ ORDERS : "defines status"
+    DICT_PAYMENT_METHODS |o--o{ ORDERS : "defines payment"
     DICT_SHIPPING_METHODS ||--o{ ORDER_SHIPMENTS : "defines carrier"
     DICT_PACKAGE_TYPES ||--o{ ORDER_SHIPMENTS : "defines package size"
+    DICT_PACKAGE_TYPES ||--o{ PACKAGES : "defines package size"
 
 ```
 
-### Database Architecture Notes:
+### Schema Notes
 
-* **Separation of Invoices:** The `INVOICES` table allows billing details (like company name and tax ID) to differ from the original `CUSTOMERS` record, supporting both B2C and B2B transactions.
-* **Dictionary Tables (`DICT_`):** These enable seamless switching between languages in the PySide6 UI without hardcoding translations in the backend logic.
-* **Granular Inventory:** The `INVENTORY` table acts as a junction, tracking exactly how many units of a specific product are located on a specific warehouse shelf.
+- `INVENTORY` stores quantity for each product/location pair. `PICK_LIST_ORDERS`
+  links orders and lists through a composite primary key.
+- Invoices keep billing details independent of the customer and delivery address.
+  `PACKAGES` and `ORDER_SHIPMENTS` are separate tables. The schema permits
+  multiple invoices, shipments, or packages for one order.
+- Relationship lines reflect declared foreign keys and nullable references;
+  they do not represent completed workflows. The current connection methods do
+  not explicitly enable SQLite foreign-key enforcement.
+- Product weights, dimensions, and location limits are numeric fields without
+  unit metadata. Real mass/volume capacity checks, reservations, active flags,
+  customer phone numbers, and a virtual missing-stock location are not implemented.
