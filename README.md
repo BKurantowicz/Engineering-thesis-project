@@ -47,6 +47,18 @@ startup does not require directory renaming or Python case-handling overrides.
 Database initialization creates missing tables and leaves existing business
 records intact.
 
+### Database Selection
+
+`config.json` selects the database through `paths.database`. Database
+initialization, Dashboard, and Orders use that same path, including order reloads,
+item details, and existing controller write operations. When the key is absent,
+the default is `warehouse.db`.
+
+Relative paths resolve from the process working directory; absolute paths are
+used as supplied. Set a different path in the existing configuration and restart
+the application to use it across screens. Changing the saved path does not switch
+an already open window or copy records between database files.
+
 ## Browsing Existing Orders
 
 The Orders overview consumes the controller's named SQLite fields, including
@@ -83,8 +95,10 @@ platform. They do not open the application's database or modify its configuratio
 Startup coverage checks Git-tracked import capitalization, launches the entry
 point from a temporary tree with the exact tracked source paths and an empty
 database, and verifies that database reinitialization preserves existing records.
-The startup fixture uses the default database filename; consistent custom
-database-path propagation remains a separate pending repair.
+The clean-tree startup fixture uses the default database filename. Database-path
+integration tests also cover nondefault relative/absolute paths, a separate
+default file that must remain untouched, controller reads/writes, and restart
+after saving a different selection.
 
 Order integration tests exercise the real controller with empty and populated
 databases, optional joined data, date/limit reloads, item expansion and MainWindow
