@@ -129,7 +129,7 @@ class MainWindow(QMainWindow):
         self.view_dashboard.load_real_data()
         
         # 2. Initialize Orders View with global translator
-        self.view_orders = OrdersView(translator_obj=self.translator)
+        self.view_orders = OrdersView(translator_obj=self.translator, db_path=self.db_path)
         
         # 3. Initialize Products (Placeholder)
         self.view_products = QLabel(f"<h2>{self.t('menu_products', 'Products')}</h2>")

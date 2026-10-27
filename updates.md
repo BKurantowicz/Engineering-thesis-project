@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 2026-10-27 — Consistent database selection (US-BASE-03, #40)
+
+- Pass MainWindow's effective configured database path to OrdersView and its
+  OrderController, matching database initialization and Dashboard.
+- Preserve the default `warehouse.db`, existing relative/absolute path semantics,
+  and configuration keys. Saved path changes take effect after restart.
+- Add integration coverage for nondefault files without silent fallback, a
+  separate untouched default database, selected-file reads/writes, and restart.
+- Document database selection and regression coverage in README.
+
 ### 2026-10-25 — Existing-order row contract (US-BASE-02, #39)
 
 - Read order and item values by their SQLite field names, preventing the
