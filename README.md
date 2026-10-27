@@ -59,6 +59,13 @@ They cover repeated save/reopen cycles, individual component edits, explicit
 correction of existing text, and address fields in both languages and all three
 themes and font sizes. Change history is recorded in [updates.md](updates.md).
 
+## Change History
+
+[updates.md](updates.md) records dated application and documentation changes with
+source issue or commit references. Historical implementation entries and merge
+integrations are listed separately. Each new delivery adds an Unreleased entry;
+this README continues to describe the current application rather than its history.
+
 ## 📸 UI Preview / Screenshots
 
 - **Orders Dashboard:** `![Orders View](link_to_image.png)`
