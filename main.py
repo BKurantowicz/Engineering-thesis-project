@@ -35,19 +35,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(self.t("app_title", "WMS System"))
         self.resize(1280, 720)
 
-        # Basic dark theme stylesheet
-        self.setStyleSheet("""
-            QMainWindow { background-color: #1a1e29; color: #ffffff; }
-            QPushButton { 
-                background-color: transparent; color: #a0a5b1; 
-                text-align: left; padding: 10px; border: none; font-size: 14px;
-            }
-            QPushButton:hover { color: #ffffff; background-color: #2a2f3a; }
-            QLabel { color: #ffffff; }
-        """)
+        # Shared stylesheet rules use semantic object names.
+        self.setObjectName("main_window")
 
         # Main layout structure
         self.central_widget = QWidget()
+        self.central_widget.setObjectName("central_widget")
         self.setCentralWidget(self.central_widget)
         self.main_layout = QHBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
@@ -61,7 +54,7 @@ class MainWindow(QMainWindow):
         """Creates the left navigation panel with menu buttons."""
         self.sidebar_frame = QFrame()
         self.sidebar_frame.setFixedWidth(250)
-        self.sidebar_frame.setStyleSheet("background-color: #11141d;")
+        self.sidebar_frame.setObjectName("sidebar")
         
         self.sidebar_layout = QVBoxLayout(self.sidebar_frame)
         self.sidebar_layout.setContentsMargins(10, 20, 10, 20)
@@ -84,10 +77,7 @@ class MainWindow(QMainWindow):
         self.btn_sub_confirm = QPushButton(self.t("menu_orders_sub_confirm", "Confirmations"))
         
         for btn in [self.btn_sub_overview, self.btn_sub_picklists, self.btn_sub_packing, self.btn_sub_lists, self.btn_sub_confirm]:
-            btn.setStyleSheet("""
-                QPushButton { background-color: transparent; color: #8fbcbb; text-align: left; padding: 5px; border: none; font-size: 13px; }
-                QPushButton:hover { color: #ffffff; }
-            """)
+            btn.setObjectName("submenu_btn")
             self.orders_submenu_layout.addWidget(btn)
             
         self.orders_submenu.setVisible(False)
@@ -96,7 +86,11 @@ class MainWindow(QMainWindow):
         self.btn_products = QPushButton(self.t("menu_products", "Products"))
         self.btn_settings = QPushButton(self.t("menu_settings", "Settings"))
         self.btn_exit = QPushButton(self.t("menu_exit", "Exit"))
-        self.btn_exit.setStyleSheet("background-color: #8b0000; color: white; text-align: center; border-radius: 5px;")
+        self.btn_exit.setObjectName("danger_btn")
+
+        for button in (self.btn_dashboard, self.btn_orders, self.btn_products, self.btn_settings):
+            button.setObjectName("menu_btn")
+        self.orders_submenu.setObjectName("orders_submenu")
 
         # Add everything to the main sidebar layout
         self.sidebar_layout.addWidget(self.btn_dashboard)
@@ -171,13 +165,11 @@ if __name__ == "__main__":
     
     window = MainWindow(config, lang_translator)
     
-    # --- NOWY KOD DO MOTYWÓW ---
     theme_name = config.get("appearance", {}).get("theme", "dark")
     font_size = config.get("appearance", {}).get("font_size", "medium")
     
-    # Nanosimy arkusz stylów na całą aplikację!
-    app.setStyleSheet(ThemeManager.get_stylesheet(theme_name, font_size))
-    # ---------------------------
+    # Apply the shared widget and chart theme before showing the window.
+    ThemeManager.apply_theme(app, theme_name, font_size)
     
     window.show()
     sys.exit(app.exec())

@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QFrame, 
-    QLabel, QScrollArea, QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox
+    QLabel, QScrollArea, QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QStyledItemDelegate
 )
 from PySide6.QtCore import Qt, QDate
 
@@ -11,6 +11,7 @@ class ClickableRow(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.is_expanded = False
+        self.setProperty("expanded", False)
         self.details_panel = None
 
     def set_details_panel(self, panel):
@@ -20,10 +21,10 @@ class ClickableRow(QFrame):
         if self.details_panel:
             self.is_expanded = not self.is_expanded
             self.details_panel.setVisible(self.is_expanded)
-            if self.is_expanded:
-                self.setStyleSheet("QFrame { background-color: #3b4252; border-bottom: 1px solid #4c566a; } QLabel { color: white; padding: 5px; }")
-            else:
-                self.setStyleSheet("QFrame { background-color: #2e3440; border-bottom: 1px solid #4c566a; } QLabel { color: #d8dee9; padding: 5px; }")
+            self.setProperty("expanded", self.is_expanded)
+            self.style().unpolish(self)
+            self.style().polish(self)
+            self.update()
         super().mousePressEvent(event)
 
 
@@ -44,7 +45,7 @@ class OrderAccordionItem(QWidget):
 
         # Main summary row
         self.summary_row = ClickableRow()
-        self.summary_row.setStyleSheet("QFrame { background-color: #2e3440; border-bottom: 1px solid #4c566a; } QLabel { color: #d8dee9; padding: 5px; }")
+        self.summary_row.setObjectName("accordion_row")
         self.summary_row.setCursor(Qt.PointingHandCursor)
         self.summary_layout = QHBoxLayout(self.summary_row)
         self.summary_layout.setContentsMargins(5, 5, 5, 5)
@@ -61,7 +62,7 @@ class OrderAccordionItem(QWidget):
 
         # Expanded details panel
         self.details_panel = QFrame()
-        self.details_panel.setStyleSheet("background-color: #242933; border: 1px solid #3b4252;")
+        self.details_panel.setObjectName("details_panel")
         self.details_layout = QHBoxLayout(self.details_panel)
         self.details_layout.setContentsMargins(15, 15, 15, 15)
 
@@ -74,7 +75,7 @@ class OrderAccordionItem(QWidget):
         ]
         for act in actions:
             btn = QPushButton(act)
-            btn.setStyleSheet("background-color: transparent; color: #8fbcbb; border: none; padding: 5px; text-align: left;")
+            btn.setObjectName("action_btn")
             self.actions_layout.addWidget(btn)
 
         items_data = self.controller.get_order_items(order_data['raw_id'])
@@ -85,10 +86,7 @@ class OrderAccordionItem(QWidget):
             self.t('tbl_net'), self.t('tbl_gross'), self.t('tbl_weight')
         ])
         self.products_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.products_table.setStyleSheet("""
-            QTableWidget { background-color: #2e3440; color: white; border: none; gridline-color: #4c566a; }
-            QHeaderView::section { background-color: #242933; color: #8fbcbb; border: none; font-weight: bold; }
-        """)
+        self.products_table.setObjectName("order_items_table")
         
         for row_idx, item in enumerate(items_data):
             sku = item['sku']
@@ -129,7 +127,7 @@ class OrdersView(QWidget):
         self.layout.setContentsMargins(20, 20, 20, 20)
 
         title_lbl = QLabel(f"<h2>{self.t('ord_title')}</h2>")
-        title_lbl.setStyleSheet("color: white;")
+        title_lbl.setObjectName("title_label")
         self.layout.addWidget(title_lbl)
 
         # --- TOP TOOLBAR ---
@@ -143,16 +141,13 @@ class OrdersView(QWidget):
         self.search_addr.setPlaceholderText(self.t('ord_search_addr'))
         
         for box in [self.search_id, self.search_addr]:
-            box.setStyleSheet("background-color: #2e3440; color: white; border: 1px solid #4c566a; padding: 8px;")
+            box.setObjectName("order_search")
             box.textChanged.connect(self.filter_orders_in_memory)
             self.toolbar_layout.addWidget(box)
             
         self.date_filter = QComboBox()
-        self.date_filter.setStyleSheet("""
-            QComboBox { background-color: #2e3440; color: white; border: 1px solid #4c566a; padding: 8px; font-weight: bold; }
-            QComboBox::drop-down { border: none; }
-            QComboBox QAbstractItemView { background-color: #2e3440; color: white; selection-background-color: #3b82f6; outline: none; border: 1px solid #4c566a; }
-        """)
+        self.date_filter.setItemDelegate(QStyledItemDelegate(self.date_filter))
+        self.date_filter.setObjectName("order_date_filter")
         
         # Default empty option to prevent immediate filtering
         self.date_filter.addItem("Filter by date...", "") 
@@ -176,17 +171,14 @@ class OrdersView(QWidget):
 
         # Global Actions
         btn_add = QPushButton(self.t('act_add'))
-        btn_add.setStyleSheet("background-color: #3b4252; color: white; border: 1px solid #4c566a; padding: 8px;")
+        btn_add.setObjectName("secondary_btn")
         
         btn_import = QPushButton(self.t('act_import'))
-        btn_import.setStyleSheet("background-color: #3b82f6; color: white; border: none; padding: 8px; font-weight: bold;")
+        btn_import.setObjectName("primary_btn")
         
         self.limit_filter = QComboBox()
-        self.limit_filter.setStyleSheet("""
-            QComboBox { background-color: #2e3440; color: white; border: 1px solid #4c566a; padding: 8px; font-weight: bold; }
-            QComboBox::drop-down { border: none; }
-            QComboBox QAbstractItemView { background-color: #2e3440; color: white; selection-background-color: #3b82f6; outline: none; border: 1px solid #4c566a; }
-        """)
+        self.limit_filter.setItemDelegate(QStyledItemDelegate(self.limit_filter))
+        self.limit_filter.setObjectName("order_limit_filter")
         
         unit = self.t('ord_limit_unit')
         for limit in ["50", "100", "250", "500"]:
@@ -197,14 +189,14 @@ class OrdersView(QWidget):
 
         self.toolbar_layout.addWidget(btn_add)
         self.toolbar_layout.addWidget(btn_import)
-        self.toolbar_layout.addWidget(QLabel(f"<span style='color: white; margin-left: 10px;'>{self.t('ord_limit_label')}</span>"))
+        self.toolbar_layout.addWidget(QLabel(self.t('ord_limit_label')))
         self.toolbar_layout.addWidget(self.limit_filter)
 
         self.layout.addLayout(self.toolbar_layout)
 
         # --- COLUMN HEADERS ---
         self.headers_frame = QFrame()
-        self.headers_frame.setStyleSheet("background-color: #242933; border: 1px solid #4c566a; font-weight: bold;")
+        self.headers_frame.setObjectName("headers_frame")
         self.headers_layout = QHBoxLayout(self.headers_frame)
         self.headers_layout.setContentsMargins(5, 10, 5, 10)
 
@@ -216,7 +208,7 @@ class OrdersView(QWidget):
 
         for text, stretch in header_labels:
             lbl = QLabel(text)
-            lbl.setStyleSheet("color: #8fbcbb; border: none;")
+            lbl.setObjectName("column_label")
             self.headers_layout.addWidget(lbl, stretch)
 
         self.layout.addWidget(self.headers_frame)
@@ -226,10 +218,10 @@ class OrdersView(QWidget):
         self.scroll_area.setWidgetResizable(True)
         # Fix layout shifts by enforcing scrollbar visibility
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.scroll_area.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        self.scroll_area.setObjectName("orders_scroll")
 
         self.scroll_content = QWidget()
-        self.scroll_content.setStyleSheet("background-color: transparent;")
+        self.scroll_content.setObjectName("orders_scroll_content")
         self.scroll_layout = QVBoxLayout(self.scroll_content)
         self.scroll_layout.setAlignment(Qt.AlignTop)
         self.scroll_layout.setContentsMargins(0, 0, 0, 0)

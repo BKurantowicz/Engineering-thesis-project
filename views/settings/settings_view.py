@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QStackedWidget, QFrame, QGridLayout,
     QLineEdit, QComboBox, QCheckBox, QSpacerItem, QSizePolicy,
-    QFileDialog, QButtonGroup
+    QFileDialog, QButtonGroup, QStyledItemDelegate
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QCursor
@@ -23,7 +23,7 @@ class SettingsView(QWidget):
         # 1. Header (Title)
         title = QLabel(self.translator.t("settings_title", "WMS System Settings"))
         title.setFont(QFont("Segoe UI", 18, QFont.Bold))
-        title.setStyleSheet("color: white;")
+        title.setObjectName("title_label")
         self.main_layout.addWidget(title)
 
         # 2. Horizontal Tab Menu
@@ -40,19 +40,7 @@ class SettingsView(QWidget):
         
         self.save_btn = QPushButton(self.translator.t("settings_save", "Save configuration"))
         self.save_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4a69bd;
-                color: white;
-                border-radius: 6px;
-                padding: 10px 25px;
-                font-family: 'Segoe UI';
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #5a79cd; }
-            QPushButton:pressed { background-color: #3a59ad; }
-        """)
+        self.save_btn.setObjectName("primary_btn")
         self.save_btn.clicked.connect(self.save_settings)
         bottom_layout.addWidget(self.save_btn)
         
@@ -84,25 +72,7 @@ class SettingsView(QWidget):
             if index == 0:
                 btn.setChecked(True)
                 
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #2d3246;
-                    color: #a0a0a0;
-                    border-radius: 15px;
-                    padding: 8px 20px;
-                    font-family: 'Segoe UI';
-                    font-weight: bold;
-                    border: none;
-                }
-                QPushButton:checked {
-                    background-color: #48dbfb;
-                    color: #1e2130;
-                }
-                QPushButton:hover:!checked {
-                    background-color: #3a3f58;
-                    color: white;
-                }
-            """)
+            btn.setObjectName("tab_btn")
             
             # W PySide6 używamy id dla przycisków w grupie
             self.tab_group.addButton(btn, index)
@@ -117,23 +87,7 @@ class SettingsView(QWidget):
     def _create_card_frame(self):
         """Tworzy panel (kartę) z ciemniejszym tłem i zaokrąglonymi rogami"""
         frame = QFrame()
-        frame.setStyleSheet("""
-            QFrame {
-                background-color: #2d3246;
-                border-radius: 10px;
-            }
-            QLabel { color: white; border: none; background: transparent; }
-            QLineEdit, QComboBox {
-                background-color: #1e2130;
-                border: 1px solid #3a3f58;
-                border-radius: 5px;
-                padding: 6px;
-                color: white;
-                font-family: 'Segoe UI';
-            }
-            QLineEdit:focus, QComboBox:focus { border: 1px solid #48dbfb; }
-            QCheckBox { color: white; font-family: 'Segoe UI'; background: transparent; }
-        """)
+        frame.setObjectName("settings_card")
         return frame
 
     def _add_path_row(self, layout, row, label_text):
@@ -142,12 +96,7 @@ class SettingsView(QWidget):
         line_edit = QLineEdit()
         btn = QPushButton(self.translator.t("btn_browse", "Browse..."))
         btn.setCursor(QCursor(Qt.PointingHandCursor))
-        btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3a3f58; color: white; border-radius: 5px; padding: 6px 12px; border: none;
-            }
-            QPushButton:hover { background-color: #4a4f68; }
-        """)
+        btn.setObjectName("browse_btn")
         
         layout.addWidget(lbl, row, 0)
         layout.addWidget(line_edit, row, 1)
@@ -222,7 +171,7 @@ class SettingsView(QWidget):
         self._add_form_row(grid, 6, self.translator.t("comp_phone", "Phone Number:"), self.comp_phone)
         
         lbl_smtp = QLabel(self.translator.t("comp_smtp", "SMTP Mail Key:"))
-        lbl_smtp.setStyleSheet("margin-top: 15px; color: #feca57;") # Wyróżnienie sekcji wrażliwej
+        lbl_smtp.setObjectName("accent_label")
         grid.addWidget(lbl_smtp, 7, 0)
         grid.addWidget(self.smtp_key, 7, 1)
 
@@ -251,6 +200,8 @@ class SettingsView(QWidget):
         
         self.cb_date = QComboBox()
         self.cb_date.addItems(["YYYY-MM-DD", "DD.MM.YYYY"])
+        for combo in (self.cb_lang, self.cb_theme, self.cb_font, self.cb_date):
+            combo.setItemDelegate(QStyledItemDelegate(combo))
         
         self._add_form_row(grid, 0, self.translator.t("app_lang", "System Language:"), self.cb_lang)
         self._add_form_row(grid, 1, self.translator.t("app_theme", "Visual Theme:"), self.cb_theme)
@@ -385,8 +336,7 @@ class SettingsView(QWidget):
             from utils.theme_manager import ThemeManager
             app = QApplication.instance()
             if app:
-                new_css = ThemeManager.get_stylesheet(config["appearance"]["theme"], config["appearance"]["font_size"])
-                app.setStyleSheet(new_css)
+                ThemeManager.apply_theme(app, config["appearance"]["theme"], config["appearance"]["font_size"])
 
         if success:
             QMessageBox.information(
