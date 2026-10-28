@@ -74,6 +74,8 @@ class ThemeManager:
             QTableWidget {{ background-color: {p['bg_card']}; color: {p['text_main']}; gridline-color: {p['border']}; border: none; selection-background-color: {p['accent']}; selection-color: {p['bg_sidebar']}; }}
             QHeaderView::section {{ background-color: {p['bg_main']}; color: {p['accent']}; font-weight: bold; padding: 5px; border: none; border-bottom: 2px solid {p['border']}; }}
             QTableCornerButton::section {{ background-color: {p['bg_main']}; border: none; }}
+            QProgressBar#capacity_bar {{ background-color: {p['input_bg']}; border: 1px solid {p['border']}; border-radius: 4px; }}
+            QProgressBar#capacity_bar::chunk {{ background-color: {p['accent']}; border-radius: 3px; }}
             QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
             QChartView#chart_view {{ background: transparent; border: 1px solid {p['border']}; border-radius: 10px; }}
             QPushButton {{ background-color: {p['border']}; color: {p['text_main']}; border-radius: 5px; padding: 8px; border: none; }}

@@ -64,7 +64,7 @@ class OrdersViewTests(unittest.TestCase):
                 [(1, "ITEM-A", "Produkt A", "Product A", 123, 1.25),
                  (2, "ITEM-B", "Produkt B", "Product B", 123, 2.5)],
             )
-            connection.execute("INSERT INTO locations VALUES (1, 'A-01', 500, 1)")
+            connection.execute("INSERT INTO locations (location_id, location_code, max_weight, max_volume) VALUES (1, 'A-01', 500, 1)")
             connection.execute("INSERT INTO inventory VALUES (1, 1, 10)")
             connection.executemany(
                 """INSERT INTO orders (order_id, customer_id, order_date, status_code, total_amount, payment_method_id,

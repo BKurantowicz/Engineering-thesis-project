@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime, timedelta
+from controllers.capacity_controller import CapacityController
 
 class DashboardController:
     def __init__(self, db_path):
@@ -47,28 +48,7 @@ class DashboardController:
         return counts
 
     def get_warehouse_capacity(self):
-        """Calculate percentage-based warehouse capacity utilization from inventory table"""
-        MAX_CAPACITY = 10000 
-        
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT SUM(quantity) as total_items FROM inventory")
-                result = cursor.fetchone()
-                total_items = result['total_items'] if result['total_items'] else 0
-                
-                taken_racks_pct = (total_items / MAX_CAPACITY) * 100
-                in_picking_pct = taken_racks_pct * 0.05 
-                free_pct = 100.0 - taken_racks_pct - in_picking_pct
-                
-                return {
-                    "free_space": max(0, free_pct),
-                    "taken_on_racks": max(0, taken_racks_pct),
-                    "in_picking": max(0, in_picking_pct)
-                }
-        except Exception as e:
-            print(f"Error calculating warehouse capacity: {e}")
-            return {"free_space": 100, "taken_on_racks": 0, "in_picking": 0}
+        return CapacityController(self.db_path).get_capacity()
 
     def get_order_trend(self, filter_type="7_days"):
         """Fetches dynamic order inflow trend for both current and previous periods."""
