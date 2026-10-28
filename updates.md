@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### 2026-10-28 — Customer contact and address maintenance (US-15-02, #37)
+
+- Add a reachable Customers list and translated/themed Add/Edit forms using the
+  configured database and stable record identities.
+- Require names and address components; accept optional phone/email and validate
+  supplied email structure. Store blank optional contacts as absent values.
+- Enforce case-insensitive email uniqueness within each write transaction,
+  including simultaneous application saves. Report legacy collisions without
+  automatically rewriting, merging, or deleting existing records.
+- Add the nullable phone column through a repeatable, non-destructive migration.
+- Preserve historical delivery/billing details and order quantities/prices when
+  editing customer master data; cancelled or failed saves leave records unchanged.
+- Add isolated persistence, migration, concurrency, and form regressions; update
+  README behavior/schema documentation.
+
 ### 2026-10-28 — Consistent runtime themes (US-12-01, #12)
 
 - Replace local MainWindow, Orders, Dashboard, and Settings stylesheets with

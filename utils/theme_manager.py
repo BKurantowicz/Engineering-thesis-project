@@ -63,6 +63,7 @@ class ThemeManager:
             QLabel {{ color: {p['text_main']}; background: transparent; border: none; }}
             QLabel#title_label {{ font-size: 18px; font-weight: bold; }}
             QLabel#muted_label {{ color: {p['text_muted']}; }}
+            QLabel#error_label {{ color: {p['chart_new']}; }}
             QLabel#accent_label, QLabel#column_label {{ color: {p['accent']}; }}
             QLabel#accent_label {{ margin-top: 15px; }}
             QLineEdit, QComboBox {{ background-color: {p['input_bg']}; color: {p['text_main']}; border: 1px solid {p['border']}; border-radius: 5px; padding: 6px; }}
