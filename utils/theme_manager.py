@@ -59,7 +59,17 @@ class ThemeManager:
             QLineEdit, QComboBox {{ background-color: {p['input_bg']}; border: 1px solid {p['border']}; border-radius: 5px; padding: 6px; color: {p['text_main']}; }}
             QLineEdit:focus, QComboBox:focus {{ border: 1px solid {p['border_focus']}; }}
             QComboBox::drop-down {{ border: none; }}
-            QComboBox QAbstractItemView {{ background-color: {p['bg_card']}; color: {p['text_main']}; selection-background-color: {p['primary']}; border: 1px solid {p['border']}; }}
+            QComboBox QAbstractItemView {{
+                background-color: {p['bg_card']}; color: {p['text_main']};
+                selection-background-color: {p['accent']};
+                selection-color: {p['bg_sidebar']};
+                border: 1px solid {p['border']};
+            }}
+            QComboBox QAbstractItemView::item {{ padding: 4px 6px; }}
+            QComboBox QAbstractItemView::item:selected,
+            QComboBox QAbstractItemView::item:hover {{
+                background-color: {p['accent']}; color: {p['bg_sidebar']};
+            }}
             
             QTableWidget {{ background-color: {p['bg_card']}; color: {p['text_main']}; gridline-color: {p['border']}; border: none; }}
             QHeaderView::section {{ background-color: {p['bg_main']}; color: {p['accent']}; font-weight: bold; padding: 5px; border: none; border-bottom: 2px solid {p['border']}; }}
