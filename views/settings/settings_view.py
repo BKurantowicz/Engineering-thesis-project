@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QStackedWidget, QFrame, QGridLayout,
     QLineEdit, QComboBox, QCheckBox, QSpacerItem, QSizePolicy,
-    QFileDialog, QButtonGroup
+    QFileDialog, QButtonGroup, QStyledItemDelegate
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QCursor
@@ -117,13 +117,14 @@ class SettingsView(QWidget):
     def _create_card_frame(self):
         """Tworzy panel (kartę) z ciemniejszym tłem i zaokrąglonymi rogami"""
         frame = QFrame()
+        frame.setObjectName("settings_card")
         frame.setStyleSheet("""
-            QFrame {
+            QFrame#settings_card {
                 background-color: #2d3246;
                 border-radius: 10px;
             }
             QLabel { color: white; border: none; background: transparent; }
-            QLineEdit, QComboBox {
+            QLineEdit {
                 background-color: #1e2130;
                 border: 1px solid #3a3f58;
                 border-radius: 5px;
@@ -131,7 +132,7 @@ class SettingsView(QWidget):
                 color: white;
                 font-family: 'Segoe UI';
             }
-            QLineEdit:focus, QComboBox:focus { border: 1px solid #48dbfb; }
+            QLineEdit:focus { border: 1px solid #48dbfb; }
             QCheckBox { color: white; font-family: 'Segoe UI'; background: transparent; }
         """)
         return frame
@@ -251,6 +252,10 @@ class SettingsView(QWidget):
         
         self.cb_date = QComboBox()
         self.cb_date.addItems(["YYYY-MM-DD", "DD.MM.YYYY"])
+
+        # Use item-view painting so the shared popup selection colors apply.
+        for combo in (self.cb_lang, self.cb_theme, self.cb_font, self.cb_date):
+            combo.setItemDelegate(QStyledItemDelegate(combo))
         
         self._add_form_row(grid, 0, self.translator.t("app_lang", "System Language:"), self.cb_lang)
         self._add_form_row(grid, 1, self.translator.t("app_theme", "Visual Theme:"), self.cb_theme)

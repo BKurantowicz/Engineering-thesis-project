@@ -45,6 +45,15 @@ If an older configuration contains duplicated address text, correct the affected
 field explicitly and save. Existing text is displayed as stored; the application
 does not guess which parts to remove. No configuration migration is required.
 
+### Settings Dropdowns
+
+The language, theme, font-size, and date-format dropdowns use the shared theme
+for both their closed values and expanded option lists. Saving Dark, Light, or
+Modern updates their popup and selection colors immediately, including switches
+back to Light. Existing options, keyboard/mouse selection, and the four Settings
+pages are preserved. The isolated regression suite also covers both languages,
+all three font sizes, contrast, repeated switches, and save/reopen bindings.
+
 ### Settings Regression Tests
 
 With Python 3 and PySide6 installed, run from the repository root:
