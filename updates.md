@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### 2026-10-28 — Consistent runtime themes (US-12-01, #12)
+
+- Replace local MainWindow, Orders, Dashboard, and Settings stylesheets with
+  semantic object names and centralized Light/Dark/Modern palette rules.
+- Apply the shared theme at startup and on Settings Save; refresh existing chart
+  backgrounds, axes, labels, legends, series, and slices without replacing data.
+- Preserve theme colors after data reloads and for charts created later.
+- Keep readable dropdown popup/selection behavior compatible with US-17-01;
+  centralize accordion expansion styling and preserve existing interactions.
+- Add full-window offscreen regression coverage using isolated configuration and
+  databases, and document the runtime theme API and current behavior in README.
+
 ### 2026-10-27 — Consistent database selection (US-BASE-03, #40)
 
 - Pass MainWindow's effective configured database path to OrdersView and its

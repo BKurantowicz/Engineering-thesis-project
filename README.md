@@ -69,6 +69,25 @@ controls reload the list without accumulating duplicate entries.
 
 Browsing, reloading, and expanding orders do not modify order or inventory data.
 
+## Runtime Themes
+
+Saving Dark, Light, or Modern in Settings updates existing screens immediately:
+navigation, order filters and expanded item tables, all four Settings pages, and
+Dashboard charts. Chart backgrounds, legends, axes, labels, series, and slices
+follow the shared palette without rebuilding chart data. New charts and reloaded
+capacity slices also use the active theme.
+
+`ThemeManager.get_palette()` supplies widget/chart colors and
+`ThemeManager.apply_theme()` applies the application stylesheet at startup and
+on Save. Object-name rules replace local widget stylesheets. Dropdown popups use
+styled item delegates and explicit text/selection colors, including after
+switching back to Light. Existing filters, navigation, and Settings bindings are
+preserved; language changes still require a restart.
+
+The regression command below also checks runtime theme switches in the complete
+window with temporary database/configuration fixtures, including English/Polish
+labels, existing chart objects, order expansion, and all Settings pages.
+
 ## Company Settings
 
 In **Settings > Company Data**, the company address is edited in separate

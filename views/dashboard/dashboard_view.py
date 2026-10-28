@@ -1,15 +1,16 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QComboBox, QFrame
+    QComboBox, QFrame, QApplication, QStyledItemDelegate
 )
 from PySide6.QtCharts import (
     QChart, QChartView, QSplineSeries, QPieSeries, 
     QBarSeries, QBarSet, QBarCategoryAxis, QValueAxis,
     QAbstractBarSeries
 )
-from PySide6.QtCore import Qt, QMargins, QPointF
+from PySide6.QtCore import Qt, QMargins, QPointF, QEvent
 from PySide6.QtGui import QPainter, QColor, QFont, QPen
 from controllers.dashboard_controller import DashboardController
+from utils.theme_manager import ThemeManager
 
 class DashboardView(QWidget):
     def __init__(self, translator, controller=None):
@@ -18,6 +19,42 @@ class DashboardView(QWidget):
         self.controller = controller 
         
         self.setup_ui()
+        self.apply_chart_theme()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.StyleChange and hasattr(self, "status_chart"):
+            self.apply_chart_theme()
+
+    def apply_chart_theme(self):
+        """Refresh existing chart objects without replacing their data or state."""
+        app = QApplication.instance()
+        palette = ThemeManager.get_palette(app.property("theme_name") if app else None)
+        for chart in (self.trend_chart, self.capacity_chart, self.status_chart):
+            chart.setBackgroundBrush(QColor(palette["bg_card"]))
+            chart.setPlotAreaBackgroundBrush(QColor(palette["bg_card"]))
+            chart.setTitleBrush(QColor(palette["text_main"]))
+            chart.legend().setLabelColor(QColor(palette["text_main"]))
+            for axis in chart.axes():
+                axis.setLabelsColor(QColor(palette["text_main"]))
+                axis.setTitleBrush(QColor(palette["text_main"]))
+                axis.setGridLineColor(QColor(palette["border"]))
+                axis.setLinePen(QPen(QColor(palette["text_muted"]), 1))
+        for series, color in zip(self.trend_chart.series(), ("text_muted", "accent")):
+            pen = series.pen()
+            pen.setColor(QColor(palette[color]))
+            series.setPen(pen)
+            series.setPointLabelsColor(QColor(palette["text_main"]))
+        for bar, color in zip(self.status_chart.series()[0].barSets(),
+                              ("chart_new", "chart_progress", "chart_packed", "chart_shipped")):
+            bar.setColor(QColor(palette[color]))
+            bar.setBorderColor(QColor(palette[color]))
+            bar.setLabelColor(QColor(palette["text_main"]))
+        for section, color in zip(self.capacity_chart.series()[0].slices(),
+                                  ("accent", "warning", "success")):
+            section.setColor(QColor(palette[color]))
+            section.setBorderColor(QColor(palette["bg_card"]))
+            section.setLabelColor(QColor(palette["text_main"]))
 
     def setup_ui(self):
         self.main_layout = QVBoxLayout(self)
@@ -43,29 +80,19 @@ class DashboardView(QWidget):
         
         title = QLabel(self.translator.t("dashboard_title", "Dashboard (WMS Analytics)"))
         title.setFont(QFont("Segoe UI", 18, QFont.Bold))
-        title.setStyleSheet("color: white;")
+        title.setObjectName("title_label")
         
         filter_label = QLabel(self.translator.t("dashboard_trend_label", "Order inflow trend analysis:"))
-        filter_label.setStyleSheet("color: #a0a0a0; font-size: 14px;")
+        filter_label.setObjectName("muted_label")
         
         self.time_filter = QComboBox()
+        self.time_filter.setItemDelegate(QStyledItemDelegate(self.time_filter))
         self.time_filter.addItems([
             self.translator.t("filter_7_days", "Last 7 days"), 
             self.translator.t("filter_month", "This month"), 
             self.translator.t("filter_year", "This year")
         ])
-        self.time_filter.setStyleSheet("""
-            QComboBox {
-                background-color: #1e2130;
-                color: white;
-                border: 1px solid #3a3f58;
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-family: 'Segoe UI';
-                font-size: 13px;
-            }
-            QComboBox::drop-down { border: none; }
-        """)
+        self.time_filter.setObjectName("dashboard_period")
         
         self.time_filter.currentIndexChanged.connect(self._on_filter_changed)
         
@@ -86,12 +113,9 @@ class DashboardView(QWidget):
         
         title_font = QFont("Segoe UI", 12, QFont.Bold)
         chart.setTitleFont(title_font)
-        chart.setTitleBrush(QColor("#ffffff"))
         
-        chart.setBackgroundBrush(QColor("#1e2130"))
         chart.setPlotAreaBackgroundVisible(False)
         
-        chart.legend().setLabelColor(QColor("#a0a0a0"))
         chart.legend().setFont(QFont("Segoe UI", 10))
         chart.legend().setAlignment(Qt.AlignTop)
         chart.setMargins(QMargins(10, 10, 10, 10))
@@ -100,7 +124,7 @@ class DashboardView(QWidget):
     def _create_chart_view(self, chart):
         view = QChartView(chart)
         view.setRenderHint(QPainter.Antialiasing) # Key for smooth lines
-        view.setStyleSheet("background-color: transparent; border: 1px solid #3a3f58; border-radius: 10px;")
+        view.setObjectName("chart_view")
         return view
 
     def setup_trend_chart(self):
@@ -109,19 +133,18 @@ class DashboardView(QWidget):
         # 1. Zmiana na QSplineSeries (gładkie, nowoczesne krzywe) + pogrubienie
         series_prev = QSplineSeries()
         series_prev.setName(self.translator.t("trend_prev", "Previous period"))
-        pen_prev = QPen(QColor("#576574")) # Stonowany szary
+        pen_prev = QPen() # Stonowany szary
         pen_prev.setWidth(3)
         series_prev.setPen(pen_prev)
         
         series_curr = QSplineSeries()
         series_curr.setName(self.translator.t("trend_curr", "Current period"))
-        pen_curr = QPen(QColor("#48dbfb")) # Nowoczesny, jasny niebieski/cyan
+        pen_curr = QPen() # Nowoczesny, jasny niebieski/cyan
         pen_curr.setWidth(4)
         series_curr.setPen(pen_curr)
         
         series_curr.setPointLabelsVisible(True)
         series_curr.setPointLabelsFormat("@yPoint")
-        series_curr.setPointLabelsColor(QColor("white"))
         series_curr.setPointLabelsFont(QFont("Segoe UI", 11, QFont.Bold))
         series_curr.setPointLabelsClipping(False)
         
@@ -130,22 +153,15 @@ class DashboardView(QWidget):
         
         # Osie
         axis_font = QFont("Segoe UI", 9)
-        grid_color = QColor("#2d3246") # Bardziej subtelna siatka
         
         self.axis_x_trend = QBarCategoryAxis()
         self.axis_x_trend.setLabelsFont(axis_font)
-        self.axis_x_trend.setLabelsColor(QColor("#a0a0a0"))
-        self.axis_x_trend.setGridLineColor(grid_color)
-        self.axis_x_trend.setLinePen(QPen(QColor("#4b526b"), 1))
         self.trend_chart.addAxis(self.axis_x_trend, Qt.AlignBottom)
         series_prev.attachAxis(self.axis_x_trend)
         series_curr.attachAxis(self.axis_x_trend)
         
         self.axis_y_trend = QValueAxis()
         self.axis_y_trend.setLabelsFont(axis_font)
-        self.axis_y_trend.setLabelsColor(QColor("#a0a0a0"))
-        self.axis_y_trend.setGridLineColor(grid_color)
-        self.axis_y_trend.setLinePen(QPen(QColor("#4b526b"), 1))
         self.axis_y_trend.setLabelFormat("%d") 
         self.trend_chart.addAxis(self.axis_y_trend, Qt.AlignLeft)
         series_prev.attachAxis(self.axis_y_trend)
@@ -172,19 +188,15 @@ class DashboardView(QWidget):
         # 3. Zmiana palety kolorów na pastelowe, nowoczesne odcienie
         set_new = QBarSet(self.translator.t("status_new", "New"))
         set_new.append([0])
-        set_new.setColor(QColor("#ff6b6b")) # Pastelowy czerwony
         
         set_progress = QBarSet(self.translator.t("status_in_progress", "In Progress"))
         set_progress.append([0])
-        set_progress.setColor(QColor("#54a0ff")) # Czysty niebieski
         
         set_packed = QBarSet(self.translator.t("status_packed", "Packed"))
         set_packed.append([0])
-        set_packed.setColor(QColor("#feca57")) # Żółty/Pomarańczowy
         
         set_shipped = QBarSet(self.translator.t("status_shipped", "Shipped"))
         set_shipped.append([0])
-        set_shipped.setColor(QColor("#1dd1a1")) # Miętowy zielony
         
         series = QBarSeries()
         series.append(set_new)
@@ -198,7 +210,6 @@ class DashboardView(QWidget):
         self.status_chart.addSeries(series)
         
         axis_font = QFont("Segoe UI", 9)
-        grid_color = QColor("#2d3246")
         
         axis_x = QBarCategoryAxis()
         axis_x.append([""])
@@ -207,8 +218,6 @@ class DashboardView(QWidget):
         
         axis_y = QValueAxis()
         axis_y.setLabelsFont(axis_font)
-        axis_y.setLabelsColor(QColor("#a0a0a0"))
-        axis_y.setGridLineColor(grid_color)
         self.status_chart.addAxis(axis_y, Qt.AlignLeft)
         series.attachAxis(axis_y)
 
@@ -238,26 +247,21 @@ class DashboardView(QWidget):
         
         lbl_free = f"{self.translator.t('cap_free', 'Free space')} ({capacity['free_space']:.1f}%)"
         slice_free = series_pie.append(lbl_free, capacity['free_space'])
-        slice_free.setColor(QColor("#48dbfb"))
         slice_free.setLabelVisible()
-        slice_free.setLabelColor(QColor("#c8d6e5"))
         slice_free.setLabelFont(lbl_font)
         
         lbl_racks = f"{self.translator.t('cap_racks', 'Taken on racks')} ({capacity['taken_on_racks']:.1f}%)"
         slice_racks = series_pie.append(lbl_racks, capacity['taken_on_racks'])
-        slice_racks.setColor(QColor("#ff9f43"))
         slice_racks.setLabelVisible()
-        slice_racks.setLabelColor(QColor("#c8d6e5"))
         slice_racks.setLabelFont(lbl_font)
         
         lbl_pick = f"{self.translator.t('cap_picking', 'In picking')} ({capacity['in_picking']:.1f}%)"
         slice_picking = series_pie.append(lbl_pick, capacity['in_picking'])
-        slice_picking.setColor(QColor("#1dd1a1"))
         slice_picking.setLabelVisible()
-        slice_picking.setLabelColor(QColor("#c8d6e5"))
         slice_picking.setLabelFont(lbl_font)
 
         self.update_trend_chart("7_days")
+        self.apply_chart_theme()
 
     def update_trend_chart(self, filter_type):
         trend_data = self.controller.get_order_trend(filter_type)
