@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### 2026-10-28 — Physical weight and volume capacity (US-8-01, #25)
+
+- Replace the hardcoded 10,000-unit denominator and synthetic In picking segment
+  with independent kg/m³ indicators for the warehouse or a selected physical rack.
+- Calculate decimal usage from stored quantities and product measurements;
+  aggregate warehouse percentages against summed rack limits.
+- Add repeatable physical/virtual location classification; exclude virtual braki
+  stock and limits without deleting existing records or changing quantities.
+- Treat unavailable measurements, limits, invalid stock, and read failures as
+  unavailable data. Show valid empty racks as 0% and legacy overloads truthfully.
+- Refresh current values while preserving the selected rack and trend period.
+- Add isolated calculation, migration, and translated/themed UI regressions;
+  adapt existing theme/fixture checks and update README behavior/schema details.
+
 ### 2026-10-28 — Consistent runtime themes (US-12-01, #12)
 
 - Replace local MainWindow, Orders, Dashboard, and Settings stylesheets with

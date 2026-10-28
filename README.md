@@ -69,13 +69,38 @@ controls reload the list without accumulating duplicate entries.
 
 Browsing, reloading, and expanding orders do not modify order or inventory data.
 
+## Warehouse Capacity
+
+The Dashboard shows separate **Weight** (kg) and **Volume** (m³) indicators.
+Select the entire warehouse or a physical rack to see used/maximum values and
+utilization. **Refresh data** reloads current quantities and limits while keeping
+the selected rack and order-trend period.
+
+Weight is the sum of stored quantity × unit weight. Volume is the sum of stored
+quantity × length × width × height / 1,000,000, using product dimensions in cm.
+Warehouse percentages divide total physical usage by total matching rack limits;
+they are not an average of rack percentages. Calculations use decimal arithmetic.
+
+`inventory.quantity` represents stock physically on a rack, including reserved
+goods that have not been picked. Removing picked goods from that quantity reduces
+occupancy. Virtual locations contribute neither usage nor capacity. Startup adds
+`locations.is_virtual` with a physical default and identifies the reserved `braki`
+location as virtual, preserving existing stock and limits. The reserved code is
+also recognized case-insensitively when reading older/external inserts.
+
+Missing/invalid limits or necessary measurements show **Unavailable data**, with
+an explanation on hover, for the affected metric. Valid empty racks show 0%; no
+physical racks, unreadable data, or unclassified stock never imply free capacity.
+Legacy utilization above 100% is reported accurately in text; the bar stops at
+100%. This dashboard is read-only; placement enforcement is a separate operation.
+
 ## Runtime Themes
 
 Saving Dark, Light, or Modern in Settings updates existing screens immediately:
 navigation, order filters and expanded item tables, all four Settings pages, and
-Dashboard charts. Chart backgrounds, legends, axes, labels, series, and slices
-follow the shared palette without rebuilding chart data. New charts and reloaded
-capacity slices also use the active theme.
+Dashboard charts and capacity indicators. Chart backgrounds, legends, axes,
+labels, and series follow the shared palette without rebuilding chart data.
+New charts and refreshed capacity values also use the active theme.
 
 `ThemeManager.get_palette()` supplies widget/chart colors and
 `ThemeManager.apply_theme()` applies the application stylesheet at startup and
@@ -187,7 +212,8 @@ classDiagram
     class DashboardView {
         -controller: DashboardController
         -trend_chart: QChart
-        -capacity_chart: QChart
+        -capacity_panel: QFrame
+        -capacity_scope: QComboBox
         -status_chart: QChart
         +setup_ui() void
         +load_real_data() void
@@ -335,6 +361,7 @@ erDiagram
         string location_code "e.g., A1-01"
         float max_weight
         float max_volume
+        int is_virtual "0 physical, 1 virtual"
     }
     INVENTORY {
         int product_id PK, FK

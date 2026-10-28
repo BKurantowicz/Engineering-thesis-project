@@ -101,9 +101,15 @@ class DatabaseManager:
                     location_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     location_code TEXT UNIQUE NOT NULL,
                     max_weight REAL NOT NULL,
-                    max_volume REAL NOT NULL
+                    max_volume REAL NOT NULL,
+                    is_virtual INTEGER NOT NULL DEFAULT 0 CHECK (is_virtual IN (0, 1))
                 )
             """)
+
+            location_columns = {row[1].lower() for row in cursor.execute("PRAGMA table_info(locations)")}
+            if "is_virtual" not in location_columns:
+                cursor.execute("ALTER TABLE locations ADD COLUMN is_virtual INTEGER NOT NULL DEFAULT 0 CHECK (is_virtual IN (0, 1))")
+            cursor.execute("UPDATE locations SET is_virtual = 1 WHERE lower(trim(location_code)) = 'braki' AND is_virtual = 0")
 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS inventory (
