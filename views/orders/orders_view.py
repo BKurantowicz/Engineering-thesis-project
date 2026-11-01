@@ -118,12 +118,12 @@ class OrderAccordionItem(QWidget):
 
 
 class OrdersView(QWidget):
-    def __init__(self, translator_obj):
+    def __init__(self, translator_obj, db_path="warehouse.db"):
         super().__init__()
         # Use the global translator object passed from MainWindow instead of creating a new one
         self.translator = translator_obj
         self.t = self.translator.t
-        self.controller = OrderController()
+        self.controller = OrderController(db_path=db_path)
         
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(20, 20, 20, 20)
