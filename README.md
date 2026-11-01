@@ -324,6 +324,13 @@ rollback/idempotence, actual dialogs, and repeatable explicit demo generation.
 The clean-checkout test materializes Git-tracked source paths, so new application
 modules must be tracked when running that test during development.
 
+## Change History
+
+[updates.md](updates.md) records dated application and documentation changes
+with source issue or commit references. Earlier implementation entries and
+merge integrations are listed separately. This README describes the current
+application rather than its chronological history.
+
 ## Architecture
 
 Views use controllers for persistence and share the translator/theme manager.
