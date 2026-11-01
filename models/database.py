@@ -75,9 +75,14 @@ class DatabaseManager:
                     street TEXT NOT NULL,
                     postal_code TEXT NOT NULL,
                     city TEXT NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    phone TEXT
                 )
             """)
+
+            customer_columns = {row[1].lower() for row in cursor.execute("PRAGMA table_info(customers)")}
+            if "phone" not in customer_columns:
+                cursor.execute("ALTER TABLE customers ADD COLUMN phone TEXT")
 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS products (

@@ -15,6 +15,8 @@ from controllers.dashboard_controller import DashboardController
 from views.dashboard.dashboard_view import DashboardView
 from views.settings.settings_view import SettingsView
 from controllers.settings_controller import SettingsController
+from controllers.customer_controller import CustomerController
+from views.customers.customers_view import CustomersView
 from utils.theme_manager import ThemeManager
 
 class MainWindow(QMainWindow):
@@ -84,11 +86,12 @@ class MainWindow(QMainWindow):
         
         # Rest of the main menu
         self.btn_products = QPushButton(self.t("menu_products", "Products"))
+        self.btn_customers = QPushButton(self.t("menu_customers", "Customers"))
         self.btn_settings = QPushButton(self.t("menu_settings", "Settings"))
         self.btn_exit = QPushButton(self.t("menu_exit", "Exit"))
         self.btn_exit.setObjectName("danger_btn")
 
-        for button in (self.btn_dashboard, self.btn_orders, self.btn_products, self.btn_settings):
+        for button in (self.btn_dashboard, self.btn_orders, self.btn_products, self.btn_customers, self.btn_settings):
             button.setObjectName("menu_btn")
         self.orders_submenu.setObjectName("orders_submenu")
 
@@ -97,6 +100,7 @@ class MainWindow(QMainWindow):
         self.sidebar_layout.addWidget(self.btn_orders)
         self.sidebar_layout.addWidget(self.orders_submenu)
         self.sidebar_layout.addWidget(self.btn_products)
+        self.sidebar_layout.addWidget(self.btn_customers)
         self.sidebar_layout.addWidget(self.btn_settings)
         self.sidebar_layout.addStretch()
         self.sidebar_layout.addWidget(self.btn_exit)
@@ -106,6 +110,7 @@ class MainWindow(QMainWindow):
         self.btn_orders.clicked.connect(lambda: self.orders_submenu.setVisible(not self.orders_submenu.isVisible()))
         self.btn_sub_overview.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
         self.btn_products.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
+        self.btn_customers.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.view_customers))
         
         # Bind Settings view to index 3
         self.btn_settings.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))
@@ -134,11 +139,15 @@ class MainWindow(QMainWindow):
         self.view_settings = SettingsView(translator=self.translator, controller=self.settings_ctrl)
         self.view_settings.load_settings()
 
+        self.customer_ctrl = CustomerController(self.db_path)
+        self.view_customers = CustomersView(self.translator, self.customer_ctrl)
+
         # Add all views to stack container in exact order of indices
         self.stacked_widget.addWidget(self.view_dashboard) # Index 0
         self.stacked_widget.addWidget(self.view_orders)    # Index 1
         self.stacked_widget.addWidget(self.view_products)  # Index 2
         self.stacked_widget.addWidget(self.view_settings)  # Index 3
+        self.stacked_widget.addWidget(self.view_customers)
 
         self.main_layout.addWidget(self.stacked_widget)
 

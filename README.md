@@ -69,6 +69,32 @@ controls reload the list without accumulating duplicate entries.
 
 Browsing, reloading, and expanding orders do not modify order or inventory data.
 
+## Customer Details
+
+**Customers** opens the customer list; **Add customer** and **Edit customer**
+open translated forms backed by `CustomerController` and the configured database.
+First name, last name, street, postal code, and city are required. Email and phone
+are optional; blank contact fields are stored as absent values. Phone and postal
+code have no country-specific format restriction.
+
+A supplied email is checked for address structure and uniqueness regardless of
+letter case. Application saves compare Unicode case-folded addresses inside the
+same SQLite write transaction as the insert/update, while retaining the entered
+address spelling. An edit preserves the customer ID and historical delivery,
+billing, order-item quantities, and prices. Cancelled or rejected forms do not
+write changes.
+
+Startup adds the nullable `customers.phone` column to existing databases when
+needed; it does not reset customer records. Existing emails that collide after
+case-folding are listed by customer ID for review and remain unchanged. The
+application blocks a conflicting save and never automatically merges or deletes
+those records. The current list provides Add/Edit access; customer search and
+retirement actions are separate work.
+
+The isolated regression suite covers legacy migration, optional contacts, case
+variants and concurrent duplicate attempts, preserved history, localized forms,
+cancellation, and failed-save rollback.
+
 ## Runtime Themes
 
 Saving Dark, Light, or Modern in Settings updates existing screens immediately:
@@ -310,6 +336,7 @@ erDiagram
         string first_name
         string last_name
         string email
+        string phone
         string street
         string postal_code
         string city
