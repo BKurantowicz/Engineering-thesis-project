@@ -172,6 +172,15 @@
   contrast, rendered selection colors, keyboard/mouse input, and reopening.
 - Document the current dropdown behavior in README.
 
+### 2026-10-27 — Current application documentation audit (US-7-01, #23)
+
+- Audited the original screens, startup behavior, architecture, and 17-table
+  schema, correcting earlier claims about unfinished workflows and missing
+  package relationships.
+- Reconciled that audit with subsequent implementations: the current README
+  now describes the delivered warehouse/store workflows and all 19 tables.
+- Kept the README focused on current behavior; historical changes belong here.
+
 ### 2026-10-27 — Consistent database selection (US-BASE-03, #40)
 
 - Pass MainWindow's effective configured database path to OrdersView and its
