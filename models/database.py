@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from models.warehouse_schema import initialize_warehouse_schema
 
 class DatabaseManager:
     def __init__(self, db_path="warehouse.db"):
@@ -76,13 +77,16 @@ class DatabaseManager:
                     postal_code TEXT NOT NULL,
                     city TEXT NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    phone TEXT
+                    phone TEXT,
+                    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))
                 )
             """)
 
             customer_columns = {row[1].lower() for row in cursor.execute("PRAGMA table_info(customers)")}
             if "phone" not in customer_columns:
                 cursor.execute("ALTER TABLE customers ADD COLUMN phone TEXT")
+            if "is_active" not in customer_columns:
+                cursor.execute("ALTER TABLE customers ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))")
 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS products (
@@ -106,9 +110,15 @@ class DatabaseManager:
                     location_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     location_code TEXT UNIQUE NOT NULL,
                     max_weight REAL NOT NULL,
-                    max_volume REAL NOT NULL
+                    max_volume REAL NOT NULL,
+                    is_virtual INTEGER NOT NULL DEFAULT 0 CHECK (is_virtual IN (0, 1))
                 )
             """)
+
+            location_columns = {row[1].lower() for row in cursor.execute("PRAGMA table_info(locations)")}
+            if "is_virtual" not in location_columns:
+                cursor.execute("ALTER TABLE locations ADD COLUMN is_virtual INTEGER NOT NULL DEFAULT 0 CHECK (is_virtual IN (0, 1))")
+            cursor.execute("UPDATE locations SET is_virtual = 1 WHERE lower(trim(location_code)) = 'braki' AND is_virtual = 0")
 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS inventory (
@@ -234,7 +244,26 @@ class DatabaseManager:
                 )
             """)
 
+            # Customer lifecycle guards also cover connections with foreign keys disabled.
+            cursor.execute("""
+                CREATE TRIGGER IF NOT EXISTS protect_referenced_customer
+                BEFORE DELETE ON customers
+                WHEN EXISTS (SELECT 1 FROM orders WHERE customer_id = OLD.customer_id)
+                BEGIN
+                    SELECT RAISE(ABORT, 'customer_referenced');
+                END
+            """)
+            cursor.execute("""
+                CREATE TRIGGER IF NOT EXISTS reject_new_order_for_inactive_customer
+                BEFORE INSERT ON orders
+                WHEN EXISTS (SELECT 1 FROM customers WHERE customer_id = NEW.customer_id AND is_active = 0)
+                BEGIN
+                    SELECT RAISE(ABORT, 'inactive_customer');
+                END
+            """)
+
             # --- 5. INITIAL SEED DATA ---
+            initialize_warehouse_schema(cursor)
             cursor.execute("SELECT COUNT(*) FROM dict_order_statuses")
             if cursor.fetchone()[0] == 0:
                 statuses = [

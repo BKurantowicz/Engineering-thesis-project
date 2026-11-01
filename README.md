@@ -1,36 +1,52 @@
 # ERP & Warehouse Management System
 
-## 📌 Project Overview
+## Project Overview
 
-This application is an ERP system created to monitor incoming orders and assist with warehouse operations and implementations. It provides a comprehensive set of tools to manage inventory, process shipments, and analyze business performance.
+This engineering thesis project is a Python/PySide6 desktop application for store
+and warehouse operations. It provides an order browser, customer and product
+maintenance, physical stock capacity checks, persistent picking workflows,
+shortage reconciliation, dashboard analytics, and application settings. SQLite
+stores business data; JSON stores configuration. English and Polish interfaces
+share Dark, Light, and Modern themes.
 
-The application is built with a focus on usability and supports bilingual interface localization (English and Polish).
+[updates.md](updates.md) records change history. This README describes the current
+application and its operational limits.
 
-## 🚀 Key Features
+## Current Functionality and Limits
 
-- **Order Management:** Add, delete, modify, and manage user orders seamlessly.
+- Browse existing orders and their items, delivery details, dates, and totals.
+- Add/edit/search customers and products; deactivate referenced records while
+  retaining history, or delete unused records after confirmation.
+- Add stock under weight/volume limits; inspect physical, reserved, and saleable
+  quantities with combined catalogue filters.
+- Generate lists with manually chosen racks, reserve stock, confirm cumulative
+  picking progress, close handled lists, and reconcile physical shortages.
+- Inspect virtual missing-stock history and independent kg/m³ utilization.
+- Save company settings, appearance, localization, paths, and preferences.
 
-- **Invoicing:** Generate and manage invoices independently of customer profiles (supporting B2B/company details and separate billing addresses).
+Order creation/import UI, packing, shipment purchasing, invoice generation,
+account/login assignment, and route optimization are not implemented. Existing
+Add/Import/detail-action and other order submenu placeholders do not constitute
+those workflows. Language changes require restart; some older order UI/data
+labels still use fixed-language values. Backup/notification/path-browse controls
+do not establish implemented operational services. Rack limits are stored data;
+a rack-management form is not included.
 
-- **Data Import:** Built-in tools to import external orders directly into the database.
+## Technology and Structure
 
-- **Warehouse Control:** Track inventory levels, product locations (shelves/racks), and pick lists.
+Python 3, PySide6 (including Qt Charts), standard-library SQLite/JSON, and
+`unittest` are used. There is no dependency manifest at present.
 
-- **Analytics & Statistics:** View detailed statistics regarding sales, top products, and overall business performance.
-
-- **Bilingual Support:** Database architecture designed to support multiple languages natively.
-
-- **Dynamic Configuration & Theming:** Centralized settings module managing system paths, company metadata, and localization. Features a live CSS `ThemeManager` for zero-restart visual switching (Dark, Light, Modern) and scalable UI fonts safely persisted in a recursive JSON structure.
-
-## 🛠️ Technology Stack
-
-- **Language:** Python 3
-
-- **GUI Framework:** PySide6 (Qt for Python) - ensuring a fast, responsive, and native desktop experience.
-
-- **Database:** SQLite3 - lightweight, serverless, and robust internal database.
-
-- **Configuration:** JSON - used for local application settings, paths, and user preferences.
+```text
+main.py            Entry point, configured database, navigation, view refresh
+models/            SQLite initialization and additive warehouse migrations
+controllers/       Validation, transactions, capacity, catalogue, orders, picking
+views/             PySide6 screens and forms; persistence stays in controllers
+utils/             Shared themes, translation loader, English/Polish dictionaries
+seed_demo.py       Explicit coherent development-data generation
+config.json        Application configuration and preferences
+tests/             Isolated database/configuration and offscreen UI regressions
+```
 
 ## Running from a Checkout
 
@@ -50,9 +66,9 @@ records intact.
 ### Database Selection
 
 `config.json` selects the database through `paths.database`. Database
-initialization, Dashboard, and Orders use that same path, including order reloads,
-item details, and existing controller write operations. When the key is absent,
-the default is `warehouse.db`.
+initialization, Dashboard, Orders, Customers, Products, and Pick Lists use that
+same path, including reloads, details, and controller write operations. When the
+key is absent, the default is `warehouse.db`.
 
 Relative paths resolve from the process working directory; absolute paths are
 used as supplied. Set a different path in the existing configuration and restart
@@ -68,6 +84,45 @@ Expanding a row shows that order's item details. Existing date and result-limit
 controls reload the list without accumulating duplicate entries.
 
 Browsing, reloading, and expanding orders do not modify order or inventory data.
+
+## Products and Physical Stock
+
+**Products** shows product ID, SKU, localized name, price, physical stock,
+reservations, saleable quantity, rack codes, and active state. Search matches SKU
+and either name using Unicode case-folding. Rack, quantity, and price filters
+combine with AND; bounds are inclusive and blank bounds are unrestricted.
+An inverted range or non-integer quantity bound is rejected. Selecting a rack
+includes products with an inventory entry there; warehouse scope sums physical
+racks without duplicating rows. Clearing search preserves the other filters.
+
+Saleable quantity is physical rack stock minus outstanding reservations, excluding
+virtual `braki`. Inactive products have **zero saleable quantity**, while physical
+and reserved values remain visible. Inactive products cannot be newly selected
+into order items; their existing order lines continue through picking normally.
+
+**Add/Edit product** requires SKU, both names, and a finite price >= 0 with at most
+two decimal places. Descriptions are optional. Weight is in kg and dimensions in
+cm; catalogue-only records may omit them. Catalogue saving does not add stock.
+An edit retains product ID and historical order quantities, prices, and references.
+SKU uniqueness ignores case, is checked in the same serialized write transaction,
+and retains entered spelling. Existing case-variant collisions are reported by ID
+without automatic merging/deletion. These case-fold rules govern application
+saves; direct external SQL must obey the same rules.
+
+**Add stock** increases the product/rack quantity by a positive whole number.
+It requires positive weight and all three dimensions, a physical rack, and valid
+persisted capacity data. Both resulting limits are checked in the same transaction
+as inventory and movement-log writes. Exactly 100% is allowed; exceeding either
+limit leaves everything unchanged and lists only physical racks fitting the
+entire addition under both limits. If none fits, nothing is saved. Changing stored
+product measurements checks every occupied physical rack and rolls back an invalid
+or over-capacity edit.
+
+**Deactivate/Reactivate** persists state without losing stock or history.
+**Delete product** rejects references from order items, inventory, movements,
+picking allocations, or shortage history; database triggers also protect these
+references. Successful stock entry and picking refresh catalogue quantities and
+Dashboard capacity. Inactive records remain searchable for maintenance.
 
 ## Customer Details
 
@@ -88,20 +143,136 @@ Startup adds the nullable `customers.phone` column to existing databases when
 needed; it does not reset customer records. Existing emails that collide after
 case-folding are listed by customer ID for review and remain unchanged. The
 application blocks a conflicting save and never automatically merges or deletes
-those records. The current list provides Add/Edit access; customer search and
-retirement actions are separate work.
+those records. The list provides Add/Edit and retirement actions, with a
+case-insensitive search across email, first name, last name, and city. Search
+treats punctuation literally and includes inactive customers for maintenance.
+Clearing it restores the list; empty records and unmatched queries have distinct
+messages. Editing or changing a customer's state retains the current query;
+actions always use the displayed record's stable customer ID.
+
+Each customer has a visible Active/Inactive state. **Deactivate** and
+**Reactivate** preserve the record identity, contact data, and historical orders.
+Existing databases gain `customers.is_active` with an active default; later
+startup preserves saved inactive states. Editing contact details does not
+implicitly reactivate a customer.
+
+**Delete customer** requires confirmation and removes only a customer without
+orders. Referenced customers remain unchanged and can be deactivated instead.
+New orders for an inactive customer are rejected by `OrderController.add_order`
+and a SQLite insertion trigger. A separate trigger protects referenced customers
+from deletion, including connections with foreign-key checks disabled. These
+guards do not block updates or fulfillment of already-existing orders. The
+current Orders screen remains a browsing interface; a new-order form is not
+introduced by customer maintenance.
 
 The isolated regression suite covers legacy migration, optional contacts, case
 variants and concurrent duplicate attempts, preserved history, localized forms,
 cancellation, and failed-save rollback.
 
+## Warehouse Capacity
+
+The Dashboard shows separate **Weight** (kg) and **Volume** (m³) indicators.
+Select the entire warehouse or a physical rack to see used/maximum values and
+utilization. **Refresh data** reloads current quantities and limits while keeping
+the selected rack and order-trend period.
+
+Weight is the sum of stored quantity × unit weight. Volume is the sum of stored
+quantity × length × width × height / 1,000,000, using product dimensions in cm.
+Warehouse percentages divide total physical usage by total matching rack limits;
+they are not an average of rack percentages. Calculations use decimal arithmetic.
+
+`inventory.quantity` represents stock physically on a rack, including reserved
+goods that have not been picked. Removing picked goods from that quantity reduces
+occupancy. Virtual locations contribute neither usage nor capacity. Startup adds
+`locations.is_virtual` with a physical default and identifies the reserved `braki`
+location as virtual, preserving existing stock and limits. The reserved code is
+also recognized case-insensitively when reading older/external inserts.
+
+Missing/invalid limits or necessary measurements show **Unavailable data**, with
+an explanation on hover, for the affected metric. Valid empty racks show 0%; no
+physical racks, unreadable data, or unclassified stock never imply free capacity.
+Legacy utilization above 100% is reported accurately in text; the bar stops at
+100%. The dashboard is read-only; Products > Add stock enforces placement limits.
+
+## Pick Lists and Shortages
+
+Open **Orders > Pick Lists**, choose **Generate pick list**, and select eligible
+NEW/IN_PROGRESS orders. An order already on an open list or already fully picked
+cannot be generated again. Enter quantities for each order-item/source-rack row;
+sources can be split across physical racks and must sum exactly to demand.
+Shared availability is rechecked on save. Generation atomically stores list/order
+links, allocations, and reservations without reducing physical stock. Reopening
+preserves these choices; no route optimization occurs.
+
+**Start** moves NEW orders to IN_PROGRESS. Select a saved line and enter its
+**Picked total** (the cumulative quantity, not an additional increment), then
+**Confirm total**. Only the increase is deducted from its source and reservation.
+Repeating the same total is harmless; totals cannot decrease or exceed allocation.
+Progress survives reopening. **Close list** requires every line to be picked or
+resolved. Closing retains history and does not mark an order PACKED or SHIPPED;
+fully picked IN_PROGRESS orders await a separate packing workflow.
+
+**Report shortage** records the actual quantity still on the selected source rack,
+excluding already-picked units. If recorded stock changes while the form is open,
+reopen it and recount. The confirmed missing difference is recorded once at virtual
+`braki`, with source/product/list/operation identity available under **Missing stock
+history**. Virtual quantities are never saleable, pickable, physical capacity, or
+overflow storage.
+
+Reconciliation handles all open lists reserving the affected product/source, plus
+the initiating list, together. Their orders are considered by ascending order date
+and then order ID. Each complete order is retained when its whole demand can be
+met; otherwise it is cancelled with a shortage reason, and later orders are still
+considered. For demands 5, 4, 2 with seven units, orders 5 and 2 are retained and
+order 4 is cancelled. Unaffected lists keep their reservations.
+
+Physically existing picked goods of cancelled orders return under both capacity
+limits, preferring source racks and splitting across other physical racks when
+needed. Missing units are never returned as physical stock. If all available racks
+cannot fit a return, the entire reconciliation remains unsaved until space/data
+is corrected. For 3 picked A and 1 missing B, only B enters `braki`; A returns.
+
+Stock, reservations, cancellations, replacement allocations, returns, and the
+missing-stock event are one transaction. Repeated submission of the same operation
+cannot duplicate missing units or returns. Older allocations remain as resolved
+history; replacement rows describe revised sources. The event stores the previous
+allocation snapshot and result for traceability.
+
+## Demonstration Data
+
+Create a separate development database explicitly:
+
+```text
+python seed_demo.py --database demo.db
+```
+
+To replace a database designated as mock data, close the application and opt in:
+
+```text
+python seed_demo.py --database demo.db --replace-mock
+```
+
+The complete dataset is built in a temporary sibling file and replaces the target
+only after generation succeeds. Existing targets are refused without the flag;
+active SQLite sidecars prevent replacement. Startup never seeds destructively.
+Choose `demo.db` in the configured database path and restart to view it.
+
+The dataset includes five plausible products, three customers, three physical
+racks (500 kg/1 m³, 750 kg/1.5 m³, 500 kg/1 m³), an open list, partially picked
+list, closed list, and a shortage-cancelled example with returned goods and virtual
+missing stock. All racks fit both limits and stock/reservations reflect actual
+progress. Repeating explicit replacement creates a coherent dataset without
+accumulating duplicates/orphans. Capacities are thesis examples, not equipment
+certification claims.
+
 ## Runtime Themes
 
 Saving Dark, Light, or Modern in Settings updates existing screens immediately:
-navigation, order filters and expanded item tables, all four Settings pages, and
-Dashboard charts. Chart backgrounds, legends, axes, labels, series, and slices
-follow the shared palette without rebuilding chart data. New charts and reloaded
-capacity slices also use the active theme.
+navigation, catalogue/customer/picking controls, order filters and expanded item
+tables, all four Settings pages, and Dashboard charts and capacity indicators.
+Chart backgrounds, legends, axes, labels, and series follow the shared palette
+without rebuilding chart data.
+New charts and refreshed capacity values also use the active theme.
 
 `ThemeManager.get_palette()` supplies widget/chart colors and
 `ThemeManager.apply_theme()` applies the application stylesheet at startup and
@@ -127,7 +298,7 @@ If an older configuration contains duplicated address text, correct the affected
 field explicitly and save. Existing text is displayed as stored; the application
 does not guess which parts to remove. No configuration migration is required.
 
-### Regression Tests
+## Regression Tests
 
 With Python 3, PySide6, and Git installed, run from the repository root:
 
@@ -135,319 +306,75 @@ With Python 3, PySide6, and Git installed, run from the repository root:
 python -B -m unittest discover -s tests -v
 ```
 
-The tests use temporary configuration and database files and Qt's offscreen
-platform. They do not open the application's database or modify its configuration.
-Startup coverage checks Git-tracked import capitalization, launches the entry
-point from a temporary tree with the exact tracked source paths and an empty
-database, and verifies that database reinitialization preserves existing records.
-The clean-tree startup fixture uses the default database filename. Database-path
-integration tests also cover nondefault relative/absolute paths, a separate
-default file that must remain untouched, controller reads/writes, and restart
-after saving a different selection.
+Tests use temporary databases/configuration and offscreen Qt, never the working
+application database. Coverage includes clean-tree startup, configured paths,
+settings persistence, runtime themes, customer/SKU validation and concurrent
+writes, legacy migrations, historical references, rack capacity and concurrency,
+reservation allocation, cumulative picking, cross-list shortages, split returns,
+rollback/idempotence, actual dialogs, and repeatable explicit demo generation.
+The clean-checkout test materializes Git-tracked source paths, so new application
+modules must be tracked when running that test during development.
 
-Order integration tests exercise the real controller with empty and populated
-databases, optional joined data, date/limit reloads, item expansion and MainWindow
-startup. They verify that browsing preserves persisted records.
+## Architecture
 
-Settings coverage includes repeated save/reopen cycles, individual component
-edits, explicit correction of existing text, and address fields in both languages
-and all three themes and font sizes. Change history is recorded in
-[updates.md](updates.md).
-
-## 📸 UI Preview / Screenshots
-
-- **Orders Dashboard:** `![Orders View](link_to_image.png)`
-- **Dark Theme Interface:** `![Dark Theme](link_to_image.png)`
-
-📦 WMS-Project <br>
- ┣ 📂 controllers        # Business logic managers (Orders, Dashboard, Settings) <br>
- ┣ 📂 models             # SQLite database manager and models <br>
- ┣ 📂 utils              # Helpers (e.g., i18n JSON Translator, ThemeManager) <br>
- ┃ ┣ 📜 translations_*.json # Feature-based language dictionaries <br>
- ┃ ┣ 📜 translations.py  # Handles dynamic glob-based multi-language translation loading <br>
- ┃ ┗ 📜 theme_manager.py # Generates and injects global QSS stylesheets dynamically <br>
- ┣ 📂 views              # PySide6 UI views (Dashboard, Orders, Products, Settings) <br>
- ┣ 📜 main.py            # Main application router and window <br>
- ┣ 📜 seed_db.py         # Faker script for generating test data <br>
- ┗ 📜 config.json        # Local app configuration, safe fallbacks, and user preferences
-
-## 🏛️ System Architecture (UML Class Diagram)
-
-The application utilizes a strictly typed, component-based MVC architecture. Below is the UML representation of the core application flow, highlighting the decoupling of PySide6 Views from SQLite Business Logic. 
-`MainWindow` acts as the central router, instantiating and holding the sub-views.
+Views use controllers for persistence and share the translator/theme manager.
+InventoryController is the common physical-write/capacity guard; picking and
+shortage controllers operate within SQLite write transactions. DatabaseManager
+initializes tables and calls the additive warehouse schema initializer.
 
 ```mermaid
 classDiagram
-    direction TB
-
-    %% --- ENTRY POINT & ROUTER ---
-    class MainApp {
-        -config: dict
-        -lang_code: string
-        +main() int
-    }
-
-    class MainWindow {
-        -view_orders: OrdersView
-        -view_dashboard: DashboardView
-        -view_settings: SettingsView
-        -translator: translator
-        +setup_content_area() void
-        +change_view(view_name: string) void
-    }
-
-    %% --- UTILITIES ---
-    class translator {
-        -lang_code: string
-        -translations: dict
-        +load_all_translations(directory: string) void
-        +t(key: string, fallback: string) string
-    }
-
-    class ThemeManager {
-        <<static>>
-        +get_stylesheet(theme_name: string, font_size_name: string) string
-    }
-
-    %% --- VIEWS (UI Layer) ---
-    class DashboardView {
-        -controller: DashboardController
-        -trend_chart: QChart
-        -capacity_chart: QChart
-        -status_chart: QChart
-        +setup_ui() void
-        +load_real_data() void
-        +update_trend_chart(filter_type: string) void
-    }
-
-    class OrdersView {
-        -controller: OrderController
-        -scroll_layout: QVBoxLayout
-        +load_orders() void
-        +filter_orders_in_memory() void
-    }
-
-    class SettingsView {
-        -controller: SettingsController
-        +setup_ui() void
-        +load_settings() void
-        +save_settings() void
-    }
-
-    class OrderAccordionItem {
-        -order_id_str: string
-        -summary_row: ClickableRow
-        -details_panel: QFrame
-        +__init__(order_data, translator, controller)
-    }
-
-    class ClickableRow {
-        -is_expanded: bool
-        -details_panel: QFrame
-        +set_details_panel(panel: QFrame) void
-        +mousePressEvent(event: QEvent) void
-    }
-
-    %% --- CONTROLLERS (Business Logic Layer) ---
-    class DashboardController {
-        -db_path: string
-        +get_order_status_counts() dict
-        +get_warehouse_capacity() dict
-        +get_order_trend(filter_type: string) dict
-    }
-
-    class OrderController {
-        -db_path: string
-        +get_orders(limit: int, date_filter: string) list
-        +get_order_items(order_id: int) list
-    }
-
-    class SettingsController {
-        -config_path: string
-        -default_config: dict
-        +get_config() dict
-        +save_config(new_config: dict) bool
-        -_merge_configs(default: dict, current: dict) dict
-    }
-
-    %% --- DATABASE ---
-    class DatabaseManager {
-        -db_path: string
-        +initialize_database() void
-        +get_connection() Connection
-    }
-
-    %% ==========================================
-    %% RELATIONSHIPS & ROUTING (Strictly Ordered)
-    %% ==========================================
-
-    %% 1. Application Init
-    MainApp --> MainWindow : instantiates
-    MainApp ..> DatabaseManager : configures path
-    MainApp ..> ThemeManager : loads initial CSS
-
-    %% 2. Global Aggregations
-    MainWindow o-- translator : holds & injects into views
-
-    %% 3. View Compositions (MainWindow owns the Views)
     MainWindow *-- DashboardView
     MainWindow *-- OrdersView
+    MainWindow *-- ProductsView
+    MainWindow *-- CustomersView
+    MainWindow *-- PickListsView
     MainWindow *-- SettingsView
-    
-    %% 4. View Sub-components
-    OrdersView *-- OrderAccordionItem
-    OrderAccordionItem *-- ClickableRow
-
-    %% 5. View to Controller Links
-    DashboardView o-- DashboardController
-    OrdersView o-- OrderController
-    SettingsView o-- SettingsController
-
-    %% 6. Controller to Database Links
-    DashboardController ..> DatabaseManager : queries
-    OrderController ..> DatabaseManager : queries
-
-    %% 7. Local Triggers
-    SettingsView ..> ThemeManager : updates CSS on save
+    DashboardView --> DashboardController
+    DashboardController --> CapacityController
+    OrdersView --> OrderController
+    ProductsView --> ProductController
+    ProductsView --> ProductDialog
+    ProductsView --> StockDialog
+    CustomersView --> CustomerController
+    CustomersView --> CustomerDialog
+    PickListsView --> PickListController
+    PickListsView --> ShortageController
+    PickListsView --> AllocationDialog
+    PickListsView --> ShortageDialog
+    SettingsView --> SettingsController
+    ProductController --> InventoryController
+    PickListController --> InventoryController
+    ShortageController --> InventoryController
+    InventoryController --> CapacityController
+    MainWindow --> DatabaseManager
+    MainWindow --> ThemeManager
 ```
 
-### Architecture Notes:
-- **Separation of Concerns:** UI classes (`OrdersView`, `OrderAccordionItem`) never execute SQL. They delegate all data retrieval to the `OrderController`.
-- **Dynamic Instantiation:** `OrdersView` acts as a factory, generating multiple `OrderAccordionItem` instances based on the tuple list returned by the controller.
-- **Composition (*--) vs Aggregation (o--):** The diagram strictly differentiates between widgets that physically own other widgets (if you delete the View, the Accordions are destroyed) versus references to shared utilities like the `translator` or `OrderController`.
+## Database Schema
 
-## 🗄️ Database Architecture
-
-Below is the Entity-Relationship Diagram (ERD) mapping the core structure of the system. Dictionary tables (prefixed with `DICT_`) store names in both Polish (`name_pl`) and English (`name_en`) to natively support bilingual interface requirements.
+The diagram reflects the initialized schema. PK/UK/FK mark primary, single-column
+unique, and foreign keys; comments identify nullable non-key fields and units.
+Composite primary keys protect inventory pairs and list/order links.
 
 ```mermaid
 erDiagram
-    %% CORE TABLES %%
-    USERS {
-        int user_id PK
-        string username
-        string password_hash
-        string first_name
-        string last_name
-        string role
-    }
     CUSTOMERS {
         int customer_id PK
         string first_name
         string last_name
-        string email
-        string phone
+        string email UK "nullable"
         string street
         string postal_code
         string city
-        datetime created_at
+        datetime created_at "nullable"
+        string phone "nullable"
+        int is_active
     }
-    PRODUCTS {
-        int product_id PK
-        string sku
-        string name_pl
-        string name_en
-        string desc_pl
-        string desc_en
-        float price
-        float weight
-        float length
-        float width
-        float height
-    }
-
-    %% WAREHOUSE MODULE %%
-    LOCATIONS {
-        int location_id PK
-        string location_code "e.g., A1-01"
-        float max_weight
-        float max_volume
-    }
-    INVENTORY {
-        int product_id PK, FK
-        int location_id PK, FK
-        int quantity
-    }
-    INVENTORY_TRANSACTIONS {
-        int transaction_id PK
-        int product_id FK
-        int location_id FK
-        int user_id FK
-        int quantity_change "e.g., -2 or +10"
-        string transaction_type "e.g., PICK, RESTOCK"
-        datetime created_at
-    }
-    PICK_LISTS {
-        int pick_list_id PK
-        string status "e.g., PENDING"
-        int assigned_user_id FK
-        datetime created_at
-    }
-    PICK_LIST_ORDERS {
-        int pick_list_id PK, FK
-        int order_id PK, FK
-    }
-
-    %% ORDER & INVOICE MODULE %%
-    ORDERS {
-        int order_id PK
-        int customer_id FK
-        string status_code FK
-        int payment_method_id FK
-        int created_by FK
-        datetime order_date
-        float total_amount
-        string delivery_name
-        string delivery_second_name
-        string delivery_street
-        string delivery_postal_code
-        string delivery_city
-    }
-    ORDER_ITEMS {
-        int item_id PK
-        int order_id FK
-        int product_id FK
-        int quantity
-        float unit_price
-    }
-    ORDER_SHIPMENTS {
-        int shipment_id PK
-        int order_id FK
-        int shipping_type_id FK
-        string package_code FK
-        string tracking_number
-        float final_shipping_cost
-    }
-    INVOICES {
-        int invoice_id PK
-        int order_id FK
-        string invoice_number
-        string company_name
-        string tax_id
-        string billing_name
-        string billing_second_name
-        string billing_street
-        string billing_postal_code
-        string billing_city
-        datetime issue_date
-    }
-
-    %% DICTIONARY TABLES (BILINGUAL SUPPORT) %%
     DICT_ORDER_STATUSES {
         string status_code PK
-        string name_pl "e.g., Nowe"
-        string name_en "e.g., New"
-    }
-    DICT_SHIPPING_METHODS {
-        int shipping_id PK
-        string carrier_name "e.g., InPost"
-        string service_name_pl "e.g., Paczkomat"
-        string service_name_en "e.g., Parcel Locker"
-    }
-    DICT_PAYMENT_METHODS {
-        int id PK
-        string name_pl "e.g., Przelew"
-        string name_en "e.g., Bank Transfer"
+        string name_pl
+        string name_en
     }
     DICT_PACKAGE_TYPES {
         string package_code PK
@@ -459,41 +386,196 @@ erDiagram
         float max_height
         float base_cost
     }
+    DICT_PAYMENT_METHODS {
+        int id PK
+        string name_pl
+        string name_en
+    }
+    DICT_SHIPPING_METHODS {
+        int shipping_id PK
+        string carrier_name
+        string service_name_pl
+        string service_name_en
+    }
+    INVENTORY {
+        int product_id PK, FK
+        int location_id PK, FK
+        int quantity
+    }
+    INVENTORY_TRANSACTIONS {
+        int transaction_id PK
+        int product_id FK
+        int location_id FK
+        int user_id FK "nullable"
+        int quantity_change
+        string transaction_type
+        datetime created_at "nullable"
+    }
+    INVOICES {
+        int invoice_id PK
+        int order_id FK "nullable"
+        string invoice_number UK
+        string company_name "nullable"
+        string tax_id "nullable"
+        string billing_name "nullable"
+        string billing_second_name "nullable"
+        string billing_street "nullable"
+        string billing_postal_code "nullable"
+        string billing_city "nullable"
+        datetime issue_date "nullable"
+    }
+    LOCATIONS {
+        int location_id PK
+        string location_code UK
+        float max_weight "kg"
+        float max_volume "m3"
+        int is_virtual
+    }
+    ORDER_ITEMS {
+        int item_id PK
+        int order_id FK "nullable"
+        int product_id FK "nullable"
+        int quantity
+        float unit_price
+    }
+    ORDER_SHIPMENTS {
+        int shipment_id PK
+        int order_id FK
+        int shipping_type_id FK
+        string package_code FK
+        string tracking_number "nullable"
+        float final_shipping_cost
+    }
+    ORDERS {
+        int order_id PK
+        int customer_id FK "nullable"
+        string status_code FK "nullable"
+        int payment_method_id FK "nullable"
+        int created_by FK "nullable"
+        datetime order_date "nullable"
+        float total_amount "nullable"
+        string delivery_name "nullable"
+        string delivery_second_name "nullable"
+        string delivery_street "nullable"
+        string delivery_postal_code "nullable"
+        string delivery_city "nullable"
+        string cancellation_reason "nullable"
+    }
+    PACKAGES {
+        int package_id PK
+        int order_id FK
+        string package_code FK
+        string tracking_number UK "nullable"
+        float actual_weight "nullable"
+        datetime created_at "nullable"
+    }
+    PICK_ALLOCATIONS {
+        int allocation_id PK
+        int pick_list_id FK
+        int order_id FK
+        int order_item_id FK
+        int product_id FK
+        int location_id FK
+        int quantity
+        int reserved_quantity
+        int picked_quantity
+        int returned_quantity
+        int cancelled
+    }
+    PICK_LIST_ORDERS {
+        int pick_list_id PK, FK
+        int order_id PK, FK
+    }
+    PICK_LISTS {
+        int pick_list_id PK
+        string status "nullable"
+        int assigned_user_id FK "nullable"
+        datetime created_at "nullable"
+    }
+    PRODUCTS {
+        int product_id PK
+        string sku UK
+        string name_pl
+        string name_en
+        string desc_pl "nullable"
+        string desc_en "nullable"
+        float price
+        float weight "kg per unit"
+        float length "cm"
+        float width "cm"
+        float height "cm"
+        int is_active
+    }
+    SHORTAGE_EVENTS {
+        string operation_id PK
+        int pick_list_id FK
+        int product_id FK
+        int source_location_id FK
+        int missing_quantity
+        int actual_quantity
+        string result_json
+        datetime created_at "nullable"
+    }
+    USERS {
+        int user_id PK
+        string username UK
+        string password_hash
+        string first_name
+        string last_name
+        string role
+    }
 
-    %% --- RELATIONSHIPS --- %%
-
-    %% 1. Core Order Flow
-    CUSTOMERS ||--o{ ORDERS : "places"
-    ORDERS ||--|{ ORDER_ITEMS : "contains"
-    PRODUCTS ||--o{ ORDER_ITEMS : "is part of"
-    
-    %% 2. Order Fulfillment & Finance
-    ORDERS ||--o| INVOICES : "generates"
-    ORDERS ||--o| ORDER_SHIPMENTS : "shipped via"
-    ORDERS ||--o{ PICK_LIST_ORDERS : "assigned to"
-    PICK_LISTS ||--|{ PICK_LIST_ORDERS : "contains"
-    
-    %% 3. Inventory & Warehouse
-    PRODUCTS ||--o{ INVENTORY : "has stock in"
-    LOCATIONS ||--o{ INVENTORY : "stores"
-    PRODUCTS ||--o{ INVENTORY_TRANSACTIONS : "involved in"
-    LOCATIONS ||--o{ INVENTORY_TRANSACTIONS : "location of"
-    
-    %% 4. User Actions
-    USERS ||--o{ INVENTORY_TRANSACTIONS : "performs"
-    USERS ||--o{ PICK_LISTS : "assigned to"
-    USERS ||--o{ ORDERS : "created by"
-
-    %% 5. Dictionaries
-    DICT_ORDER_STATUSES ||--o{ ORDERS : "defines status"
-    DICT_PAYMENT_METHODS ||--o{ ORDERS : "defines payment"
-    DICT_SHIPPING_METHODS ||--o{ ORDER_SHIPMENTS : "defines carrier"
-    DICT_PACKAGE_TYPES ||--o{ ORDER_SHIPMENTS : "defines package size"
-
+    LOCATIONS ||--o{ INVENTORY : "location_id"
+    PRODUCTS ||--o{ INVENTORY : "product_id"
+    USERS |o--o{ INVENTORY_TRANSACTIONS : "user_id"
+    LOCATIONS ||--o{ INVENTORY_TRANSACTIONS : "location_id"
+    PRODUCTS ||--o{ INVENTORY_TRANSACTIONS : "product_id"
+    ORDERS |o--o{ INVOICES : "order_id"
+    PRODUCTS |o--o{ ORDER_ITEMS : "product_id"
+    ORDERS |o--o{ ORDER_ITEMS : "order_id"
+    DICT_PACKAGE_TYPES ||--o{ ORDER_SHIPMENTS : "package_code"
+    DICT_SHIPPING_METHODS ||--o{ ORDER_SHIPMENTS : "shipping_type_id"
+    ORDERS ||--o{ ORDER_SHIPMENTS : "order_id"
+    USERS |o--o{ ORDERS : "created_by"
+    DICT_PAYMENT_METHODS |o--o{ ORDERS : "payment_method_id"
+    DICT_ORDER_STATUSES |o--o{ ORDERS : "status_code"
+    CUSTOMERS |o--o{ ORDERS : "customer_id"
+    DICT_PACKAGE_TYPES ||--o{ PACKAGES : "package_code"
+    ORDERS ||--o{ PACKAGES : "order_id"
+    LOCATIONS ||--o{ PICK_ALLOCATIONS : "location_id"
+    PRODUCTS ||--o{ PICK_ALLOCATIONS : "product_id"
+    ORDER_ITEMS ||--o{ PICK_ALLOCATIONS : "order_item_id"
+    ORDERS ||--o{ PICK_ALLOCATIONS : "order_id"
+    PICK_LISTS ||--o{ PICK_ALLOCATIONS : "pick_list_id"
+    ORDERS ||--o{ PICK_LIST_ORDERS : "order_id"
+    PICK_LISTS ||--o{ PICK_LIST_ORDERS : "pick_list_id"
+    USERS |o--o{ PICK_LISTS : "assigned_user_id"
+    LOCATIONS ||--o{ SHORTAGE_EVENTS : "source_location_id"
+    PRODUCTS ||--o{ SHORTAGE_EVENTS : "product_id"
+    PICK_LISTS ||--o{ SHORTAGE_EVENTS : "pick_list_id"
 ```
 
-### Database Architecture Notes:
+### Persistence Notes
 
-* **Separation of Invoices:** The `INVOICES` table allows billing details (like company name and tax ID) to differ from the original `CUSTOMERS` record, supporting both B2C and B2B transactions.
-* **Dictionary Tables (`DICT_`):** These enable seamless switching between languages in the PySide6 UI without hardcoding translations in the backend logic.
-* **Granular Inventory:** The `INVENTORY` table acts as a junction, tracking exactly how many units of a specific product are located on a specific warehouse shelf.
+- Migrations add nullable customer phone, active product/customer flags, virtual
+  location classification, order cancellation reason, allocations/reservations,
+  and shortage events without reseeding business data. Existing active flags and
+  record identities survive later initialization.
+- Older mock pick lists without source allocations remain stored; startup does
+  not invent reservations or picking progress for them. They cannot be completed
+  through the new workflow. Use the explicit demonstration seed only when replacing
+  a designated mock database; real historical data is never silently rebuilt.
+- `pick_allocations.reserved_quantity` is outstanding physical stock promised to
+  an order. Picked quantities have left the rack; returned quantities re-enter
+  physical inventory. The allocation `cancelled` flag also identifies a resolved
+  source allocation replaced during reconciliation, independently of order status.
+- Delivery fields live on orders; billing fields live on invoices. Master-data
+  edits do not overwrite those snapshots. Shipment/package/invoice schema alone
+  does not imply completed UI workflows.
+- Explicit transactional checks and lifecycle triggers protect business data.
+  Existing connections do not enable every SQLite foreign-key constraint;
+  external writers must respect all references, capacity, reservation, and
+  validation contracts.
+- Physical measurements and limits use kg/cm/m³ as documented above. Unknown
+  measurements/limits are not inferred from demonstration values or treated as
+  free capacity. Legacy collisions and overloads are surfaced for correction.

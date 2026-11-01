@@ -93,7 +93,7 @@ class CustomerDetailsTests(unittest.TestCase):
             before = connection.execute("SELECT * FROM customers").fetchall()
         DatabaseManager(str(legacy_path))
         with closing(sqlite3.connect(legacy_path)) as connection:
-            after = connection.execute("SELECT * FROM customers").fetchall()
+            after = connection.execute("SELECT customer_id, first_name, last_name, email, street, postal_code, city, created_at, phone FROM customers").fetchall()
             columns = [row[1] for row in connection.execute("PRAGMA table_info(customers)")]
         self.assertEqual(columns.count("phone"), 1)
         self.assertEqual([row[:-1] for row in after], before)
@@ -162,10 +162,10 @@ class CustomerDetailsTests(unittest.TestCase):
     def test_add_edit_reopen_preserves_identity_and_optional_contacts(self):
         customer_id = self.controller.save_customer(VALID)
         reopened = CustomerController(str(self.db_path))
-        self.assertEqual(dict(reopened.get_customer(customer_id)), dict(VALID, customer_id=customer_id))
+        self.assertEqual(dict(reopened.get_customer(customer_id)), dict(VALID, customer_id=customer_id, is_active=1))
         edited = dict(VALID, first_name="Anne", phone="+44 20 1234 5678")
         self.assertEqual(reopened.save_customer(edited, customer_id), customer_id)
-        self.assertEqual(dict(self.controller.get_customer(customer_id)), dict(edited, customer_id=customer_id))
+        self.assertEqual(dict(self.controller.get_customer(customer_id)), dict(edited, customer_id=customer_id, is_active=1))
         for _ in range(2):
             blank_id = self.controller.save_customer(dict(VALID, email="  ", phone=""))
             self.assertIsNone(self.controller.get_customer(blank_id)["email"])

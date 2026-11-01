@@ -1,5 +1,11 @@
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timedelta
+
+class OrderValidationError(ValueError):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
 
 class OrderController:
     def __init__(self, db_path="warehouse.db"):
@@ -143,8 +149,10 @@ class OrderController:
             delivery_data.get('city', '')
         )
 
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            conn.commit()
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
+            conn.execute("BEGIN IMMEDIATE")
+            customer = conn.execute("SELECT is_active FROM customers WHERE customer_id = ?", (customer_id,)).fetchone()
+            if customer is not None and not customer[0]:
+                raise OrderValidationError("inactive_customer")
+            cursor = conn.execute(query, params)
             return cursor.lastrowid

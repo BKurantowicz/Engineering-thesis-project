@@ -50,7 +50,7 @@ class ThemeManager:
         p = ThemeManager.get_palette(theme_name)
         return f"""
             * {{ font-family: 'Segoe UI', Arial, sans-serif; font-size: {base_font}; }}
-            QMainWindow, QDialog, QWidget#central_widget {{ background-color: {p['bg_main']}; color: {p['text_main']}; }}
+            QMainWindow, QDialog, QWidget#central_widget, QWidget#customers_view, QWidget#products_view, QWidget#picking_view {{ background-color: {p['bg_main']}; color: {p['text_main']}; }}
             QFrame {{ background-color: {p['bg_card']}; border: 1px solid {p['border']}; border-radius: 8px; }}
             QFrame#sidebar {{ background-color: {p['bg_sidebar']}; border: none; border-right: 1px solid {p['border']}; border-radius: 0; }}
             QFrame#orders_submenu {{ background: transparent; border: none; }}
@@ -66,7 +66,7 @@ class ThemeManager:
             QLabel#error_label {{ color: {p['chart_new']}; }}
             QLabel#accent_label, QLabel#column_label {{ color: {p['accent']}; }}
             QLabel#accent_label {{ margin-top: 15px; }}
-            QLineEdit, QComboBox {{ background-color: {p['input_bg']}; color: {p['text_main']}; border: 1px solid {p['border']}; border-radius: 5px; padding: 6px; }}
+            QLineEdit, QComboBox, QSpinBox {{ background-color: {p['input_bg']}; color: {p['text_main']}; border: 1px solid {p['border']}; border-radius: 5px; padding: 6px; }}
             QLineEdit:focus, QComboBox:focus {{ border: 1px solid {p['border_focus']}; }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{ background-color: {p['bg_card']}; color: {p['text_main']}; selection-background-color: {p['accent']}; selection-color: {p['bg_sidebar']}; border: 1px solid {p['border']}; outline: none; }}
@@ -75,6 +75,8 @@ class ThemeManager:
             QTableWidget {{ background-color: {p['bg_card']}; color: {p['text_main']}; gridline-color: {p['border']}; border: none; selection-background-color: {p['accent']}; selection-color: {p['bg_sidebar']}; }}
             QHeaderView::section {{ background-color: {p['bg_main']}; color: {p['accent']}; font-weight: bold; padding: 5px; border: none; border-bottom: 2px solid {p['border']}; }}
             QTableCornerButton::section {{ background-color: {p['bg_main']}; border: none; }}
+            QProgressBar#capacity_bar {{ background-color: {p['input_bg']}; border: 1px solid {p['border']}; border-radius: 4px; }}
+            QProgressBar#capacity_bar::chunk {{ background-color: {p['accent']}; border-radius: 3px; }}
             QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
             QChartView#chart_view {{ background: transparent; border: 1px solid {p['border']}; border-radius: 10px; }}
             QPushButton {{ background-color: {p['border']}; color: {p['text_main']}; border-radius: 5px; padding: 8px; border: none; }}

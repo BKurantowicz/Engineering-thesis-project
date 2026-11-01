@@ -21,7 +21,17 @@
     "cust_error_invalid_email": "Enter a valid email address.",
     "cust_error_duplicate_email": "This email address is already used by another customer.",
     "cust_error_not_found": "This customer no longer exists. Refresh the list and select another record.",
-    "cust_error_storage": "Customer data could not be accessed. Please try again."
+    "cust_error_storage": "Customer data could not be accessed. Please try again.",
+    "cust_is_active": "Status",
+    "cust_active": "Active",
+    "cust_inactive": "Inactive",
+    "cust_deactivate": "Deactivate",
+    "cust_reactivate": "Reactivate",
+    "cust_delete": "Delete customer",
+    "cust_confirm_delete": "Delete customer #{id}? This permanently removes an unreferenced customer.",
+    "cust_error_referenced": "This customer has orders and cannot be deleted. Deactivate the record instead; existing orders and history remain available.",
+    "cust_search_hint": "Search email, first name, last name, or city",
+    "cust_no_matches": "No customers match this search. Clear the search to show all customers."
   },
   "pl": {
     "cust_title": "Klienci",
@@ -45,6 +55,16 @@
     "cust_error_invalid_email": "Wprowadź poprawny adres e-mail.",
     "cust_error_duplicate_email": "Ten adres e-mail jest już przypisany do innego klienta.",
     "cust_error_not_found": "Ten klient już nie istnieje. Odśwież listę i wybierz inny rekord.",
-    "cust_error_storage": "Nie udało się uzyskać dostępu do danych klientów. Spróbuj ponownie."
+    "cust_error_storage": "Nie udało się uzyskać dostępu do danych klientów. Spróbuj ponownie.",
+    "cust_is_active": "Status",
+    "cust_active": "Aktywny",
+    "cust_inactive": "Nieaktywny",
+    "cust_deactivate": "Dezaktywuj",
+    "cust_reactivate": "Aktywuj ponownie",
+    "cust_delete": "Usuń klienta",
+    "cust_confirm_delete": "Usunąć klienta #{id}? To trwale usuwa klienta bez powiązanych zamówień.",
+    "cust_error_referenced": "Ten klient ma zamówienia i nie może zostać usunięty. Zamiast tego dezaktywuj rekord; istniejące zamówienia i historia pozostaną dostępne.",
+    "cust_search_hint": "Szukaj po e-mailu, imieniu, nazwisku lub mieście",
+    "cust_no_matches": "Brak klientów pasujących do wyszukiwania. Wyczyść je, aby pokazać wszystkich klientów."
   }
 }
