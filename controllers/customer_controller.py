@@ -26,17 +26,24 @@ class CustomerController:
         connection.row_factory = sqlite3.Row
         return connection
 
-    def get_customers(self):
+    def get_customers(self, search_term=""):
         with closing(self._connect()) as connection:
-            return connection.execute(
-                "SELECT customer_id, first_name, last_name, street, postal_code, city, email, phone "
+            customers = connection.execute(
+                "SELECT customer_id, first_name, last_name, street, postal_code, city, email, phone, is_active "
                 "FROM customers ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE, customer_id"
             ).fetchall()
+        query = search_term.strip().casefold()
+        if not query:
+            return customers
+        return [customer for customer in customers if any(
+            query in (customer[field] or "").casefold()
+            for field in ("email", "first_name", "last_name", "city")
+        )]
 
     def get_customer(self, customer_id):
         with closing(self._connect()) as connection:
             customer = connection.execute(
-                "SELECT customer_id, first_name, last_name, street, postal_code, city, email, phone "
+                "SELECT customer_id, first_name, last_name, street, postal_code, city, email, phone, is_active "
                 "FROM customers WHERE customer_id = ?", (customer_id,),
             ).fetchone()
         if customer is None:
@@ -46,6 +53,25 @@ class CustomerController:
     @staticmethod
     def _email_key(email):
         return (email or "").strip().casefold()
+
+    def set_active(self, customer_id, active):
+        if not isinstance(active, bool):
+            raise CustomerValidationError("invalid_value", "is_active")
+        with closing(self._connect()) as connection, connection:
+            cursor = connection.execute(
+                "UPDATE customers SET is_active = ? WHERE customer_id = ?", (int(active), customer_id),
+            )
+            if cursor.rowcount != 1:
+                raise CustomerValidationError("not_found")
+
+    def delete_customer(self, customer_id):
+        with closing(self._connect()) as connection, connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("SELECT 1 FROM customers WHERE customer_id = ?", (customer_id,)).fetchone() is None:
+                raise CustomerValidationError("not_found")
+            if connection.execute("SELECT 1 FROM orders WHERE customer_id = ? LIMIT 1", (customer_id,)).fetchone():
+                raise CustomerValidationError("referenced")
+            connection.execute("DELETE FROM customers WHERE customer_id = ?", (customer_id,))
 
     def get_email_conflicts(self):
         """Report legacy collisions without merging, deleting, or rewriting rows."""

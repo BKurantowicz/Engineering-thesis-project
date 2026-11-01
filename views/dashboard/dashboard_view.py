@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QComboBox, QFrame, QApplication, QStyledItemDelegate
+    QComboBox, QFrame, QApplication, QStyledItemDelegate, QProgressBar, QPushButton
 )
 from PySide6.QtCharts import (
-    QChart, QChartView, QSplineSeries, QPieSeries, 
+    QChart, QChartView, QSplineSeries,
     QBarSeries, QBarSet, QBarCategoryAxis, QValueAxis,
     QAbstractBarSeries
 )
@@ -30,7 +30,7 @@ class DashboardView(QWidget):
         """Refresh existing chart objects without replacing their data or state."""
         app = QApplication.instance()
         palette = ThemeManager.get_palette(app.property("theme_name") if app else None)
-        for chart in (self.trend_chart, self.capacity_chart, self.status_chart):
+        for chart in (self.trend_chart, self.status_chart):
             chart.setBackgroundBrush(QColor(palette["bg_card"]))
             chart.setPlotAreaBackgroundBrush(QColor(palette["bg_card"]))
             chart.setTitleBrush(QColor(palette["text_main"]))
@@ -50,11 +50,6 @@ class DashboardView(QWidget):
             bar.setColor(QColor(palette[color]))
             bar.setBorderColor(QColor(palette[color]))
             bar.setLabelColor(QColor(palette["text_main"]))
-        for section, color in zip(self.capacity_chart.series()[0].slices(),
-                                  ("accent", "warning", "success")):
-            section.setColor(QColor(palette[color]))
-            section.setBorderColor(QColor(palette["bg_card"]))
-            section.setLabelColor(QColor(palette["text_main"]))
 
     def setup_ui(self):
         self.main_layout = QVBoxLayout(self)
@@ -67,7 +62,7 @@ class DashboardView(QWidget):
         self.bottom_layout = QHBoxLayout()
         self.bottom_layout.setSpacing(25)
         
-        self.setup_capacity_chart()
+        self.setup_capacity_panel()
         self.setup_status_chart()
         
         self.main_layout.addLayout(self.bottom_layout)
@@ -170,17 +165,72 @@ class DashboardView(QWidget):
         chart_view = self._create_chart_view(self.trend_chart)
         self.main_layout.addWidget(chart_view)
 
-    def setup_capacity_chart(self):
-        self.capacity_chart = self._create_base_chart(self.translator.t("cap_title", "Warehouse Capacity"))
-        self.capacity_chart.legend().hide() 
-        
-        series = QPieSeries()
-        # 2. Zamiana zwykłego koła na elegancki wykres pierścieniowy (Donut)
-        series.setHoleSize(0.45) 
-        self.capacity_chart.addSeries(series)
-        
-        chart_view = self._create_chart_view(self.capacity_chart)
-        self.bottom_layout.addWidget(chart_view)
+    def setup_capacity_panel(self):
+        self.capacity_panel = QFrame()
+        layout = QVBoxLayout(self.capacity_panel)
+        layout.setContentsMargins(18, 12, 18, 12)
+        title = QLabel(self.translator.t("cap_title"))
+        title.setObjectName("title_label")
+        layout.addWidget(title)
+        self.capacity_scope = QComboBox()
+        self.capacity_scope.setAccessibleName(self.translator.t("cap_scope"))
+        self.capacity_scope.setItemDelegate(QStyledItemDelegate(self.capacity_scope))
+        self.capacity_scope.currentIndexChanged.connect(self.display_capacity)
+        layout.addWidget(self.capacity_scope)
+        self.capacity_labels = {}
+        self.capacity_bars = {}
+        for name in ("weight", "volume"):
+            label = QLabel()
+            label.setWordWrap(True)
+            self.capacity_labels[name] = label
+            layout.addWidget(label)
+            bar = QProgressBar()
+            bar.setObjectName("capacity_bar")
+            bar.setRange(0, 1000)
+            bar.setTextVisible(False)
+            bar.setFixedHeight(12)
+            self.capacity_bars[name] = bar
+            layout.addWidget(bar)
+        self.capacity_reload = QPushButton(self.translator.t("cap_reload"))
+        self.capacity_reload.clicked.connect(self.load_real_data)
+        layout.addWidget(self.capacity_reload)
+        self.bottom_layout.addWidget(self.capacity_panel, 1)
+
+    def update_capacity(self):
+        self.capacity_data = self.controller.get_warehouse_capacity()
+        selected_id = self.capacity_scope.currentData()
+        self.capacity_scope.blockSignals(True)
+        self.capacity_scope.clear()
+        self.capacity_scope.addItem(self.translator.t("cap_warehouse"), None)
+        for rack in self.capacity_data["racks"]:
+            self.capacity_scope.addItem(rack["location_code"], rack["location_id"])
+        selected_index = self.capacity_scope.findData(selected_id)
+        self.capacity_scope.setCurrentIndex(max(selected_index, 0))
+        self.capacity_scope.blockSignals(False)
+        self.display_capacity()
+
+    def display_capacity(self):
+        if not hasattr(self, "capacity_data"):
+            return
+        selected_id = self.capacity_scope.currentData()
+        data = next((rack for rack in self.capacity_data["racks"] if rack["location_id"] == selected_id), self.capacity_data)
+        for name, unit in (("weight", "kg"), ("volume", "m³")):
+            metric = data[name]
+            percentage = metric["percentage"]
+            label = self.capacity_labels[name]
+            bar = self.capacity_bars[name]
+            heading = self.translator.t("cap_" + name)
+            if percentage is None:
+                label.setText(f"{heading}: {self.translator.t('cap_unavailable')}")
+                explanation = "\n".join(self.translator.t("cap_" + reason) for reason in metric["reasons"])
+                label.setToolTip(explanation)
+                bar.hide()
+            else:
+                label.setText(f"{heading}: {metric['used']:.3f} / {metric['capacity']:.3f} {unit} ({percentage:.1f}%)")
+                label.setToolTip("")
+                bar.setValue(int(min(percentage, 100) * 10))
+                bar.show()
+            bar.setAccessibleName(label.text())
 
     def setup_status_chart(self):
         self.status_chart = self._create_base_chart(self.translator.t("status_title", "Current Order Fulfillment Status"))
@@ -222,7 +272,7 @@ class DashboardView(QWidget):
         series.attachAxis(axis_y)
 
         chart_view = self._create_chart_view(self.status_chart)
-        self.bottom_layout.addWidget(chart_view)
+        self.bottom_layout.addWidget(chart_view, 1)
 
     def load_real_data(self):
         if not self.controller:
@@ -239,28 +289,9 @@ class DashboardView(QWidget):
         max_val = max(status_counts.values()) if status_counts.values() else 10
         self.status_chart.axes(Qt.Vertical)[0].setRange(0, max_val + (max_val * 0.3))
 
-        capacity = self.controller.get_warehouse_capacity()
-        series_pie = self.capacity_chart.series()[0]
-        series_pie.clear()
-        
-        lbl_font = QFont("Segoe UI", 10)
-        
-        lbl_free = f"{self.translator.t('cap_free', 'Free space')} ({capacity['free_space']:.1f}%)"
-        slice_free = series_pie.append(lbl_free, capacity['free_space'])
-        slice_free.setLabelVisible()
-        slice_free.setLabelFont(lbl_font)
-        
-        lbl_racks = f"{self.translator.t('cap_racks', 'Taken on racks')} ({capacity['taken_on_racks']:.1f}%)"
-        slice_racks = series_pie.append(lbl_racks, capacity['taken_on_racks'])
-        slice_racks.setLabelVisible()
-        slice_racks.setLabelFont(lbl_font)
-        
-        lbl_pick = f"{self.translator.t('cap_picking', 'In picking')} ({capacity['in_picking']:.1f}%)"
-        slice_picking = series_pie.append(lbl_pick, capacity['in_picking'])
-        slice_picking.setLabelVisible()
-        slice_picking.setLabelFont(lbl_font)
-
-        self.update_trend_chart("7_days")
+        self.update_capacity()
+        filter_map = {0: "7_days", 1: "this_month", 2: "this_year"}
+        self.update_trend_chart(filter_map.get(self.time_filter.currentIndex(), "7_days"))
         self.apply_chart_theme()
 
     def update_trend_chart(self, filter_type):

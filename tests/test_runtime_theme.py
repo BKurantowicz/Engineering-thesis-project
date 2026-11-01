@@ -54,7 +54,7 @@ class RuntimeThemeTests(unittest.TestCase):
         with closing(sqlite3.connect("theme-test.db")) as connection, connection:
             connection.execute("INSERT INTO customers (customer_id, first_name, last_name, street, postal_code, city) VALUES (1, 'Alice', 'Test', 'Street', '00-001', 'City')")
             connection.execute("INSERT INTO products (product_id, sku, name_pl, name_en, price, weight) VALUES (1, 'THEME-1', 'Produkt', 'Product', 12.30, 1)")
-            connection.execute("INSERT INTO locations VALUES (1, 'A-01', 500, 1)")
+            connection.execute("INSERT INTO locations (location_id, location_code, max_weight, max_volume) VALUES (1, 'A-01', 500, 1)")
             connection.execute("INSERT INTO inventory VALUES (1, 1, 3000)")
             for number, status in enumerate(("NEW", "IN_PROGRESS", "PACKED", "SHIPPED"), 1):
                 connection.execute("INSERT INTO orders (order_id, customer_id, status_code, total_amount) VALUES (?, 1, ?, 12.30)", (number, status))
@@ -90,7 +90,7 @@ class RuntimeThemeTests(unittest.TestCase):
         self.assertEqual(actual.name(), QColor(expected).name())
 
     def assert_chart_colors(self, dashboard, palette):
-        for chart in (dashboard.trend_chart, dashboard.capacity_chart, dashboard.status_chart):
+        for chart in (dashboard.trend_chart, dashboard.status_chart):
             self.assert_color(chart.backgroundBrush().color(), palette["bg_card"])
             self.assert_color(chart.titleBrush().color(), palette["text_main"])
             self.assert_color(chart.legend().labelColor(), palette["text_main"])
@@ -103,18 +103,16 @@ class RuntimeThemeTests(unittest.TestCase):
                             ("chart_new", "chart_progress", "chart_packed", "chart_shipped")):
             self.assert_color(bar.color(), palette[key])
             self.assert_color(bar.labelColor(), palette["text_main"])
-        for section in dashboard.capacity_chart.series()[0].slices():
-            self.assert_color(section.labelColor(), palette["text_main"])
 
     def test_saving_rethemes_existing_views_and_charts_in_both_languages(self):
         for window in (self.window, self.open_window("pl")):
             dashboard = window.view_dashboard
-            charts = (dashboard.trend_chart, dashboard.capacity_chart, dashboard.status_chart)
+            charts = (dashboard.trend_chart, dashboard.status_chart)
             points = [series.points() for series in dashboard.trend_chart.series()]
             for theme in ("light", "modern", "dark", "light"):
                 with self.subTest(language=window.translator.lang_code, theme=theme):
                     palette = self.save_theme(window, theme)
-                    self.assertEqual(charts, (dashboard.trend_chart, dashboard.capacity_chart, dashboard.status_chart))
+                    self.assertEqual(charts, (dashboard.trend_chart, dashboard.status_chart))
                     self.assertEqual(points, [series.points() for series in dashboard.trend_chart.series()])
                     self.assert_chart_colors(dashboard, palette)
                     self.assert_color(window.central_widget.palette().color(QPalette.Window), palette["bg_main"])
@@ -172,7 +170,7 @@ class RuntimeThemeTests(unittest.TestCase):
             self.assert_chart_colors(window.view_dashboard, palette)
         self.assertEqual(Path("theme-test.db").read_bytes(), before)
 
-    def test_new_charts_and_reloaded_slices_use_the_active_theme(self):
+    def test_new_charts_and_reloaded_data_use_the_active_theme(self):
         palette = self.save_theme(self.window, "light")
         dashboard = DashboardView(self.window.translator, self.window.dashboard_ctrl)
         self.widgets.append(dashboard)

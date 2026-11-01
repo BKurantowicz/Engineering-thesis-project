@@ -17,6 +17,10 @@ from views.settings.settings_view import SettingsView
 from controllers.settings_controller import SettingsController
 from controllers.customer_controller import CustomerController
 from views.customers.customers_view import CustomersView
+from controllers.product_controller import ProductController
+from views.products.products_view import ProductsView
+from controllers.pick_list_controller import PickListController
+from views.picking.pick_lists_view import PickListsView
 from utils.theme_manager import ThemeManager
 
 class MainWindow(QMainWindow):
@@ -109,6 +113,7 @@ class MainWindow(QMainWindow):
         self.btn_dashboard.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         self.btn_orders.clicked.connect(lambda: self.orders_submenu.setVisible(not self.orders_submenu.isVisible()))
         self.btn_sub_overview.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
+        self.btn_sub_picklists.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.view_picklists))
         self.btn_products.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
         self.btn_customers.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.view_customers))
         
@@ -130,9 +135,9 @@ class MainWindow(QMainWindow):
         # 2. Initialize Orders View with global translator
         self.view_orders = OrdersView(translator_obj=self.translator, db_path=self.db_path)
         
-        # 3. Initialize Products (Placeholder)
-        self.view_products = QLabel(f"<h2>{self.t('menu_products', 'Products')}</h2>")
-        self.view_products.setAlignment(Qt.AlignCenter)
+        self.product_ctrl = ProductController(self.db_path)
+        self.view_products = ProductsView(self.translator, self.product_ctrl)
+        self.view_products.stock_changed.connect(self.view_dashboard.load_real_data)
 
         # 4. Initialize Settings View and Controller
         self.settings_ctrl = SettingsController()
@@ -141,6 +146,9 @@ class MainWindow(QMainWindow):
 
         self.customer_ctrl = CustomerController(self.db_path)
         self.view_customers = CustomersView(self.translator, self.customer_ctrl)
+        self.picklist_ctrl = PickListController(self.db_path)
+        self.view_picklists = PickListsView(self.translator, self.picklist_ctrl)
+        self.view_picklists.inventory_changed.connect(self.refresh_warehouse_views)
 
         # Add all views to stack container in exact order of indices
         self.stacked_widget.addWidget(self.view_dashboard) # Index 0
@@ -148,8 +156,14 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.view_products)  # Index 2
         self.stacked_widget.addWidget(self.view_settings)  # Index 3
         self.stacked_widget.addWidget(self.view_customers)
+        self.stacked_widget.addWidget(self.view_picklists)
 
         self.main_layout.addWidget(self.stacked_widget)
+
+    def refresh_warehouse_views(self):
+        self.view_dashboard.load_real_data()
+        self.view_products.load_products()
+        self.view_orders.load_orders()
 
 
 def load_config():
