@@ -162,6 +162,16 @@
 - Add full-window offscreen regression coverage using isolated configuration and
   databases, and document the runtime theme API and current behavior in README.
 
+### 2026-10-28 — Readable Settings dropdowns (US-17-01, #20)
+
+- Restrict the Settings card selector so dropdown popup views do not inherit
+  stale background colors after a theme change.
+- Apply readable popup text, selection, and hover colors from the shared theme
+  using styled item delegates, preserving all options and settings bindings.
+- Cover both languages, all font sizes, repeated theme switches, actual palette
+  contrast, rendered selection colors, keyboard/mouse input, and reopening.
+- Document the current dropdown behavior in README.
+
 ### 2026-10-27 — Consistent database selection (US-BASE-03, #40)
 
 - Pass MainWindow's effective configured database path to OrdersView and its
