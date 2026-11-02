@@ -11,7 +11,7 @@ class OrderController:
     def __init__(self, db_path="warehouse.db"):
         self.db_path = db_path
 
-    def get_orders(self, limit=50, date_filter="", search_term="", sort_by="date_desc"):
+    def get_orders(self, limit=50, date_filter="", search_term="", sort_by="date_desc", *, identity="", destination="", product="", channel="", detailed=False):
         """
         Fetches a list of orders from the database, applying date filters, 
         text search, and including the new address columns introduced in PR 1.
@@ -38,11 +38,35 @@ class OrderController:
             FROM orders o
             LEFT JOIN customers c ON o.customer_id = c.customer_id
             LEFT JOIN dict_payment_methods pm ON o.payment_method_id = pm.id
-            LEFT JOIN order_shipments sh ON o.order_id = sh.order_id
+            LEFT JOIN order_shipments sh ON sh.shipment_id = (SELECT MIN(shipment_id) FROM order_shipments WHERE order_id=o.order_id)
             WHERE 1=1
         """
         
+        if detailed:
+            query = query.replace("o.delivery_city\n", """o.delivery_city, o.channel, o.external_ref, o.sales_snapshot,
+                o.net_cents, o.delivery_cents, o.held, sh.final_shipping_cost,
+                (SELECT MAX(dispatched_at) FROM order_shipments WHERE order_id=o.order_id) AS dispatched_at
+            """, 1)
         params = []
+        for term, columns in (
+            (identity, ["printf('ORD-%05d',o.order_id)", "o.status_code", "o.external_ref", "c.first_name || ' ' || c.last_name",
+                        "json_extract(o.sales_snapshot,'$.customer_name')"]),
+            (destination, ["o.delivery_name","o.delivery_second_name","o.delivery_street","o.delivery_postal_code","o.delivery_city",
+                           "c.first_name || ' ' || c.last_name"]),
+        ):
+            if term:
+                query += " AND (" + " OR ".join("instr(fold("+col+"),?)>0" for col in columns) + ")"
+                params.extend([term.casefold()] * len(columns))
+        if channel:
+            query += " AND fold(o.channel)=?"
+            params.append(channel.strip().casefold())
+        if product:
+            query += """ AND EXISTS (SELECT 1 FROM order_items i JOIN products p USING(product_id)
+                        WHERE i.order_id=o.order_id AND
+                        (instr(fold(COALESCE(json_extract(i.sale_snapshot,'$.sku'),p.sku)),?) OR
+                         instr(fold(COALESCE(json_extract(i.sale_snapshot,'$.name_pl'),p.name_pl)),?) OR
+                         instr(fold(COALESCE(json_extract(i.sale_snapshot,'$.name_en'),p.name_en)),?)))"""
+            params.extend([product.casefold()] * 3)
         now = datetime.now()
 
         # --- DATE FILTERING ---
@@ -108,6 +132,7 @@ class OrderController:
         with sqlite3.connect(self.db_path) as conn:
             # Enable sqlite3.Row to allow UI components to access data by column names
             conn.row_factory = sqlite3.Row
+            conn.create_function("fold", 1, lambda s: (s or "").casefold())
             cursor = conn.cursor()
             cursor.execute(query, params)
             return cursor.fetchall()
@@ -115,7 +140,7 @@ class OrderController:
     def get_order_items(self, order_id):
         """Fetches items associated with a specific order."""
         query = """
-            SELECT p.sku, p.name_pl, oi.quantity, oi.unit_price, p.weight
+            SELECT p.sku, p.name_pl, p.name_en, oi.quantity, oi.unit_price, p.weight, oi.sale_snapshot
             FROM order_items oi
             JOIN products p ON oi.product_id = p.product_id
             WHERE oi.order_id = ?

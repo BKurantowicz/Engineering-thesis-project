@@ -1,3 +1,4 @@
+from models.sales_schema import initialize_sales_schema
 import sqlite3
 import os
 from models.warehouse_schema import initialize_warehouse_schema
@@ -264,6 +265,7 @@ class DatabaseManager:
 
             # --- 5. INITIAL SEED DATA ---
             initialize_warehouse_schema(cursor)
+            initialize_sales_schema(cursor)
             cursor.execute("SELECT COUNT(*) FROM dict_order_statuses")
             if cursor.fetchone()[0] == 0:
                 statuses = [

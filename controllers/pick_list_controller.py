@@ -22,7 +22,7 @@ class PickListController:
 
     def eligible_orders(self, connection):
         orders = connection.execute("""
-            SELECT o.* FROM orders o WHERE o.status_code IN ('NEW', 'IN_PROGRESS')
+            SELECT o.* FROM orders o WHERE o.held=0 AND o.status_code IN ('NEW', 'IN_PROGRESS')
             AND NOT EXISTS (SELECT 1 FROM pick_list_orders po JOIN pick_lists pl ON pl.pick_list_id = po.pick_list_id
                             WHERE po.order_id = o.order_id AND pl.status != 'CLOSED')
             ORDER BY datetime(o.order_date), o.order_id
