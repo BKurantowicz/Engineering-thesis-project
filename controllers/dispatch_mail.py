@@ -115,7 +115,8 @@ class DispatchMail:
                 if mode=="STARTTLS":
                     smtp.starttls(context=ssl.create_default_context())
             if mode!="LOCAL":
-                password=os.environ.get(settings.get("password_env") or "WMS_SMTP_PASSWORD")
+                from utils.smtp_secret import load_password
+                password=load_password(settings["credential_id"]) if settings.get("credential_id") else os.environ.get("WMS_SMTP_PASSWORD")
                 if not settings.get("username") or not password:
                     raise ValueError("smtp_setup")
                 smtp.login(settings["username"],password)

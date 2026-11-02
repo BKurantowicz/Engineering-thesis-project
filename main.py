@@ -146,6 +146,7 @@ class MainWindow(QMainWindow):
         self.settings_ctrl = SettingsController()
         self.view_settings = SettingsView(translator=self.translator, controller=self.settings_ctrl)
         self.view_settings.load_settings()
+        self.view_settings.saved.connect(self.apply_preferences)
 
         self.customer_ctrl = CustomerController(self.db_path)
         self.view_customers = CustomersView(self.translator, self.customer_ctrl)
@@ -162,6 +163,42 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.view_picklists)
 
         self.main_layout.addWidget(self.stacked_widget)
+
+    def apply_preferences(self,config):
+        self.config=config
+        if config["appearance"].get("fullscreen"):
+            self.showFullScreen()
+        elif self.isFullScreen():
+            self.showNormal()
+        language=config["localization"]["language"]
+        if language==self.translator.lang_code:
+            return
+        current=self.stacked_widget.currentIndex()
+        submenu=not self.orders_submenu.isHidden()
+        tab=self.view_settings.stacked_widget.currentIndex()
+        filters=[w.text() for w in (self.view_orders.search_id,self.view_orders.search_addr,self.view_orders.search_product,self.view_orders.search_channel)]
+        period=self.view_orders.date_filter.currentData()
+        limit=self.view_orders.limit_filter.currentData()
+        previous=self.takeCentralWidget()
+        self.translator=translator(language,self.translator.directory)
+        self.lang_code=language
+        self.t=self.translator.t
+        self.setWindowTitle(self.t("app_title","WMS System"))
+        self.central_widget=QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.main_layout=QHBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(0,0,0,0)
+        self.main_layout.setSpacing(0)
+        self.setup_sidebar()
+        self.setup_content_area()
+        self.orders_submenu.setVisible(submenu)
+        self.stacked_widget.setCurrentIndex(current)
+        self.view_settings.tab_group.button(tab).click()
+        for w,text in zip((self.view_orders.search_id,self.view_orders.search_addr,self.view_orders.search_product,self.view_orders.search_channel),filters):
+            w.setText(text)
+        self.view_orders.date_filter.setCurrentIndex(self.view_orders.date_filter.findData(period))
+        self.view_orders.limit_filter.setCurrentIndex(self.view_orders.limit_filter.findData(limit))
+        previous.deleteLater()
 
     def open_dispatch(self,confirm):
         from views.orders.dispatch_view import DispatchDialog
@@ -207,5 +244,8 @@ if __name__ == "__main__":
     # Apply the shared widget and chart theme before showing the window.
     ThemeManager.apply_theme(app, theme_name, font_size)
     
-    window.show()
+    if config.get("appearance",{}).get("fullscreen"):
+        window.showFullScreen()
+    else:
+        window.show()
     sys.exit(app.exec())

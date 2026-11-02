@@ -57,6 +57,8 @@ class PickingUiTests(unittest.TestCase):
             self.assertEqual(len(dialog.editors), 2)
             dialog.editors[0][2].setValue(3)
             dialog.editors[1][2].setValue(2)
+            from PySide6.QtWidgets import QMessageBox
+            QTimer.singleShot(0,lambda: QApplication.activeModalWidget().button(QMessageBox.Yes).click())
             dialog.save()
         def select():
             dialog = QApplication.activeModalWidget()

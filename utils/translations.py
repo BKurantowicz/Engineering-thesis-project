@@ -4,6 +4,7 @@ import glob
 
 class translator:
     def __init__(self, lang_code, translations_dir="utils"):
+        self.directory = translations_dir
         self.lang_code = lang_code
         self.translations = {}
         self.load_all_translations(translations_dir)

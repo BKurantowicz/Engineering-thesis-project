@@ -97,7 +97,23 @@
     "uncertain": "Acceptance uncertain",
     "retry_uncertain": "SMTP acceptance is uncertain. Verify the mailbox before repeating. Send again?",
     "no_email": "No recipient email",
-    "smtp_setup": "Check SMTP account settings."
+    "smtp_setup": "Check SMTP account settings.",
+    "database_file": "Database file (after restart)",
+    "carrier_folder": "Carrier export folder",
+    "smtp_account": "SMTP account",
+    "smtp_secret_hint": "New password for this Windows user",
+    "smtp_host": "SMTP server",
+    "smtp_port": "Port",
+    "smtp_username": "Login",
+    "smtp_sender": "Sender email",
+    "smtp_security": "Transport (LOCAL is loopback only)",
+    "fullscreen": "Fullscreen",
+    "restore_prompts": "Restore hidden prompts on save",
+    "bank": "Bank account",
+    "bdo": "BDO identifier",
+    "saved_now": "Configuration saved.",
+    "confirm_generation": "Reserve the selected goods and generate this pick list?",
+    "skip_prompt": "Do not ask again when generating a list"
   },
   "pl": {
     "sale_order": "Wprowadzanie zamówienia",
@@ -197,6 +213,22 @@
     "uncertain": "Wynik wysyłki niepewny",
     "retry_uncertain": "Wynik SMTP jest niepewny. Sprawdź skrzynkę przed ponowieniem. Wysłać ponownie?",
     "no_email": "Brak adresu e-mail",
-    "smtp_setup": "Sprawdź konfigurację konta SMTP."
+    "smtp_setup": "Sprawdź konfigurację konta SMTP.",
+    "database_file": "Plik bazy (po ponownym uruchomieniu)",
+    "carrier_folder": "Folder eksportu dla kurierów",
+    "smtp_account": "Konto SMTP",
+    "smtp_secret_hint": "Nowe hasło dla tego użytkownika Windows",
+    "smtp_host": "Serwer SMTP",
+    "smtp_port": "Port",
+    "smtp_username": "Login",
+    "smtp_sender": "E-mail nadawcy",
+    "smtp_security": "Połączenie (LOCAL tylko na tym komputerze)",
+    "fullscreen": "Pełny ekran",
+    "restore_prompts": "Przywróć ukryte pytania przy zapisie",
+    "bank": "Rachunek bankowy",
+    "bdo": "Numer BDO",
+    "saved_now": "Zapisano ustawienia.",
+    "confirm_generation": "Zarezerwować wskazany towar i utworzyć listę poboru?",
+    "skip_prompt": "Nie pytaj ponownie przy tworzeniu listy"
   }
 }

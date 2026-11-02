@@ -4,10 +4,12 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox, QCheckBox, QSpacerItem, QSizePolicy,
     QFileDialog, QButtonGroup, QStyledItemDelegate
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QDialog, QFormLayout, QDialogButtonBox, QMessageBox
 from PySide6.QtGui import QFont, QCursor
 
 class SettingsView(QWidget):
+    saved = Signal(dict)
     def __init__(self, translator, controller=None):
         super().__init__()
         self.translator = translator
@@ -90,7 +92,7 @@ class SettingsView(QWidget):
         frame.setObjectName("settings_card")
         return frame
 
-    def _add_path_row(self, layout, row, label_text):
+    def _add_path_row(self, layout, row, label_text, database=False):
         """Dodaje etykietę, pole tekstowe i przycisk 'Browse' do layoutu"""
         lbl = QLabel(label_text)
         line_edit = QLineEdit()
@@ -101,6 +103,14 @@ class SettingsView(QWidget):
         layout.addWidget(lbl, row, 0)
         layout.addWidget(line_edit, row, 1)
         layout.addWidget(btn, row, 2)
+        def browse():
+            if database:
+                value,_ = QFileDialog.getOpenFileName(self,label_text,line_edit.text(),"SQLite (*.db *.sqlite *.sqlite3)")
+            else:
+                value = QFileDialog.getExistingDirectory(self,label_text,line_edit.text())
+            if value:
+                line_edit.setText(value)
+        btn.clicked.connect(browse)
         return line_edit, btn
 
     def _add_form_row(self, layout, row, label_text, widget):
@@ -137,6 +147,8 @@ class SettingsView(QWidget):
         self.path_import, _ = self._add_path_row(grid, 3, self.translator.t("path_import", "Default Import Folder:"))
         self.path_templates, _ = self._add_path_row(grid, 4, self.translator.t("path_templates", "Document Templates Folder:"))
         
+        self.database_path,_ = self._add_path_row(grid,5,self.translator.t("database_file"),True)
+        self.carrier_path,_ = self._add_path_row(grid,6,self.translator.t("carrier_folder"))
         grid.setColumnStretch(1, 1)
         layout.addWidget(card)
         layout.addStretch()
@@ -174,6 +186,12 @@ class SettingsView(QWidget):
         lbl_smtp.setObjectName("accent_label")
         grid.addWidget(lbl_smtp, 7, 0)
         grid.addWidget(self.smtp_key, 7, 1)
+        self.bank,self.bdo = QLineEdit(),QLineEdit()
+        for idx,(key,w) in enumerate((("bank",self.bank),("bdo",self.bdo)),8):
+            self._add_form_row(grid,idx,self.translator.t(key),w)
+        self.smtp_button=QPushButton(self.translator.t("smtp_account"))
+        self.smtp_button.clicked.connect(self.smtp_dialog)
+        grid.addWidget(self.smtp_button,10,0,1,2)
 
         layout.addWidget(card)
         layout.addStretch()
@@ -200,6 +218,8 @@ class SettingsView(QWidget):
         
         self.cb_date = QComboBox()
         self.cb_date.addItems(["YYYY-MM-DD", "DD.MM.YYYY"])
+        self.fullscreen = QCheckBox(self.translator.t("fullscreen"))
+        grid.addWidget(self.fullscreen,4,0,1,2)
         for combo in (self.cb_lang, self.cb_theme, self.cb_font, self.cb_date):
             combo.setItemDelegate(QStyledItemDelegate(combo))
         
@@ -229,6 +249,8 @@ class SettingsView(QWidget):
         vbox.addWidget(self.chk_toasts)
         vbox.addWidget(self.chk_sounds)
         vbox.addWidget(self.chk_autobackup)
+        self.restore_prompts=QCheckBox(self.translator.t("restore_prompts"))
+        vbox.addWidget(self.restore_prompts)
         
         layout.addWidget(card)
         layout.addStretch()
@@ -242,6 +264,8 @@ class SettingsView(QWidget):
         
         # System paths (mapped to your specific JSON keys)
         paths = config.get("paths", {})
+        self.database_path.setText(paths.get("database","warehouse.db"))
+        self.carrier_path.setText(paths.get("exports_carriers",""))
         self.path_backup.setText(paths.get("backups", ""))
         self.path_export_pick.setText(paths.get("exports_pick_lists", "")) 
         self.path_export_inv.setText(paths.get("exports_invoices", "")) 
@@ -254,6 +278,8 @@ class SettingsView(QWidget):
         
         # Company details (mapped to 'company_info' instead of 'company')
         company = config.get("company_info", {})
+        self.bank.setText(company.get("bank",""))
+        self.bdo.setText(company.get("bdo",""))
         self.comp_name.setText(company.get("name", ""))
         self.comp_nip.setText(company.get("tax_id", ""))
         
@@ -266,13 +292,16 @@ class SettingsView(QWidget):
         
         # SMTP Key is in 'email_smtp'
         smtp = config.get("email_smtp", {})
-        self.smtp_key.setText(smtp.get("smtp_key", ""))
+        self.smtp_options = dict(smtp)
+        self.smtp_key.setPlaceholderText("••••••" if smtp.get("credential_id") else self.translator.t("smtp_secret_hint"))
+        self.smtp_key.clear()
         
         # Localization and appearance
         loc = config.get("localization", {})
         appr = config.get("appearance", {})
         self.cb_lang.setCurrentText(loc.get("language", "pl"))
         self.cb_date.setCurrentText(loc.get("date_format", "YYYY-MM-DD"))
+        self.fullscreen.setChecked(appr.get("fullscreen",False))
         self.cb_theme.setCurrentText(appr.get("theme", "dark"))
         self.cb_font.setCurrentText(appr.get("font_size", "medium"))
         
@@ -282,6 +311,28 @@ class SettingsView(QWidget):
         self.chk_toasts.setChecked(notif.get("show_toasts", True))
         self.chk_sounds.setChecked(notif.get("play_sound", True))
         self.chk_autobackup.setChecked(sys_cfg.get("auto_backup_on_exit", True))
+
+    def smtp_dialog(self):
+        dlg=QDialog(self)
+        dlg.setWindowTitle(self.translator.t("smtp_account"))
+        form=QFormLayout(dlg)
+        fields={}
+        for key in ("sender","host","port","username","security"):
+            if key=="security":
+                w=QComboBox()
+                w.setItemDelegate(QStyledItemDelegate(w))
+                w.addItems(["TLS","STARTTLS","LOCAL"])
+                w.setCurrentText(self.smtp_options.get(key,"TLS"))
+            else:
+                w=QLineEdit(str(self.smtp_options.get(key,"")))
+            fields[key]=w
+            form.addRow(self.translator.t("smtp_"+key,key),w)
+        buttons=QDialogButtonBox(QDialogButtonBox.Ok|QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        form.addRow(buttons)
+        if dlg.exec()==QDialog.Accepted:
+            self.smtp_options.update({k:(w.currentText() if k=="security" else w.text().strip()) for k,w in fields.items()})
 
     def save_settings(self):
         """Collects data from UI and overwrites the config.json file."""
@@ -315,7 +366,23 @@ class SettingsView(QWidget):
         
         # Save SMTP
         if "email_smtp" not in config: config["email_smtp"] = {}
-        config["email_smtp"]["smtp_key"] = self.smtp_key.text()
+        config["email_smtp"].update(self.smtp_options)
+        if self.smtp_key.text():
+            from utils.smtp_secret import store_password
+            try:
+                config["email_smtp"]["credential_id"]=store_password(self.smtp_key.text())
+            except (OSError,AttributeError):
+                QMessageBox.warning(self,self.translator.t("smtp_account"),self.translator.t("smtp_setup"))
+                return
+            config["email_smtp"].pop("smtp_key",None)
+        config["paths"]["database"]=self.database_path.text().strip() or "warehouse.db"
+        for section,key,widget in (("paths","exports_carriers",self.carrier_path),("company_info","bank",self.bank),("company_info","bdo",self.bdo)):
+            if widget.text() or key in config[section]:
+                config[section][key]=widget.text()
+        if self.fullscreen.isChecked() or "fullscreen" in config["appearance"]:
+            config["appearance"]["fullscreen"]=self.fullscreen.isChecked()
+        if self.restore_prompts.isChecked():
+            config["system"].pop("skip_pick_confirmation",None)
         
         # Localization, appearance, system
         config["localization"]["language"] = self.cb_lang.currentText()
@@ -339,8 +406,12 @@ class SettingsView(QWidget):
                 ThemeManager.apply_theme(app, config["appearance"]["theme"], config["appearance"]["font_size"])
 
         if success:
+            self.smtp_options = dict(config["email_smtp"])
+            self.smtp_key.clear()
+            self.restore_prompts.setChecked(False)
+            self.saved.emit(config)
             QMessageBox.information(
                 self, 
                 self.translator.t("settings_saved_title", "Settings Saved"),
-                self.translator.t("settings_saved_msg", "Configuration saved.\n(Language changes still require a restart).")
+                self.translator.t("saved_now")
             )
