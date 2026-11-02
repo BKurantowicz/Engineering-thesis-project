@@ -50,7 +50,15 @@
     "conflicting_headers": "Inconsistent order header",
     "file_format": "Invalid file format",
     "order_locked": "Warehouse work has started or the order is no longer new.",
-    "identity": "Sales channel and import reference"
+    "identity": "Sales channel and import reference",
+    "prod_ean": "EAN-13 (optional)",
+    "wh_error_invalid_ean": "Enter 13 digits with a valid EAN check digit.",
+    "wh_error_duplicate_ean": "This code already identifies another product.",
+    "today_lists": "Today's open lists",
+    "print_list": "Printable pick list",
+    "shift_empty": "No open lists for today.",
+    "missing_allocations": "Historical allocation details unavailable.",
+    "file_error": "Cannot write or open file"
   },
   "pl": {
     "sale_order": "Wprowadzanie zamówienia",
@@ -103,6 +111,14 @@
     "conflicting_headers": "Sprzeczne dane nagłówka",
     "file_format": "Niepoprawny format pliku",
     "order_locked": "Realizacja już się rozpoczęła lub zamówienie nie ma statusu Nowe.",
-    "identity": "Kanał sprzedaży i numer importu"
+    "identity": "Kanał sprzedaży i numer importu",
+    "prod_ean": "EAN-13 (opcjonalny)",
+    "wh_error_invalid_ean": "Podaj 13 cyfr z poprawną cyfrą kontrolną EAN.",
+    "wh_error_duplicate_ean": "Ten kod już wskazuje inny produkt.",
+    "today_lists": "Dzisiejsze otwarte listy",
+    "print_list": "Lista poboru do wydruku",
+    "shift_empty": "Brak otwartych list na dziś.",
+    "missing_allocations": "Brak historycznych szczegółów przydziału.",
+    "file_error": "Nie można zapisać lub otworzyć pliku"
   }
 }

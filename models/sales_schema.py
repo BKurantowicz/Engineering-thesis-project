@@ -1,6 +1,7 @@
 """Additive order-entry schema. NULL distinguishes unknown historical amounts."""
 def initialize_sales_schema(cursor):
     columns = {
+        "products": {"ean":"TEXT"},
         "orders": {"channel": "TEXT", "external_ref": "TEXT", "sales_snapshot": "TEXT",
                    "net_cents": "INTEGER", "delivery_cents": "INTEGER", "held": "INTEGER NOT NULL DEFAULT 0"},
         "order_shipments": {"dispatched_at": "TEXT"},

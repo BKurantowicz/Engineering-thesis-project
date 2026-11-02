@@ -95,7 +95,12 @@ class PickListController:
 
     def get_lists(self):
         with closing(connect(self.db_path)) as connection:
-            return [dict(row) for row in connection.execute("SELECT * FROM pick_lists ORDER BY created_at DESC, pick_list_id DESC")]
+            return [dict(row) for row in connection.execute("""SELECT pl.*,date(pl.created_at,'localtime')=date('now','localtime') AS today,
+                COALESCE(SUM(CASE WHEN a.cancelled=0 AND o.status_code!='CANCELLED' THEN a.quantity END),0) AS required,
+                COALESCE(SUM(CASE WHEN a.cancelled=0 AND o.status_code!='CANCELLED' THEN a.picked_quantity END),0) AS done
+                FROM pick_lists pl LEFT JOIN pick_allocations a USING(pick_list_id)
+                LEFT JOIN orders o ON o.order_id=a.order_id GROUP BY pl.pick_list_id
+                ORDER BY pl.created_at DESC, pl.pick_list_id DESC""")]
 
     def get_rack_quantity(self, product_id, location_id):
         with closing(connect(self.db_path)) as connection:
