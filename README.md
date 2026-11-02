@@ -298,6 +298,15 @@ If an older configuration contains duplicated address text, correct the affected
 field explicitly and save. Existing text is displayed as stored; the application
 does not guess which parts to remove. No configuration migration is required.
 
+### Settings Dropdowns
+
+The language, theme, font-size, and date-format dropdowns use the shared theme
+for closed values and expanded options. Saving Dark, Light, or Modern refreshes
+their popup and selection colors, including switches back to Light. Existing
+options and keyboard/mouse controls remain available on all four Settings pages.
+The isolated regression suite checks both languages, all three font sizes,
+contrast, repeated switches, and save/reopen bindings.
+
 ## Regression Tests
 
 With Python 3, PySide6, and Git installed, run from the repository root:
@@ -314,6 +323,13 @@ reservation allocation, cumulative picking, cross-list shortages, split returns,
 rollback/idempotence, actual dialogs, and repeatable explicit demo generation.
 The clean-checkout test materializes Git-tracked source paths, so new application
 modules must be tracked when running that test during development.
+
+## Change History
+
+[updates.md](updates.md) records dated application and documentation changes
+with source issue or commit references. Earlier implementation entries and
+merge integrations are listed separately. This README describes the current
+application rather than its chronological history.
 
 ## Architecture
 
