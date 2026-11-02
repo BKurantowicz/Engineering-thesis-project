@@ -116,7 +116,7 @@ class OrderAccordionItem(QWidget):
             
             self.products_table.setItem(row_idx, 0, QTableWidgetItem(sku))
             self.products_table.setItem(row_idx, 1, QTableWidgetItem(name))
-            self.products_table.setItem(row_idx, 2, QTableWidgetItem(f"{qty} pcs"))
+            self.products_table.setItem(row_idx, 2, QTableWidgetItem(f"{qty} {self.t('units_short','pcs')}"))
             self.products_table.setItem(row_idx, 3, QTableWidgetItem(net_text))
             self.products_table.setItem(row_idx, 4, QTableWidgetItem(f"{total_gross:.2f} PLN"))
             self.products_table.setItem(row_idx, 5, QTableWidgetItem(f"{total_weight:.2f} kg"))
@@ -174,7 +174,7 @@ class OrdersView(QWidget):
         self.date_filter.setObjectName("order_date_filter")
         
         # Default empty option to prevent immediate filtering
-        self.date_filter.addItem("Filter by date...", "") 
+        self.date_filter.addItem(self.t("filter_date"), "")
         self.date_filter.addItem(self.t('ord_filter_last_7'), "last_7")
         self.date_filter.addItem(self.t('ord_filter_this_week'), "this_week")
         self.date_filter.addItem(self.t('ord_filter_last_30'), "last_30")
@@ -295,11 +295,13 @@ class OrdersView(QWidget):
             total_amount = order['total_amount']
             first_name = order['first_name']
             last_name = order['last_name']
-            payment = order['payment']
+            payment = order['payment_en'] if self.translator.lang_code == 'en' else order['payment']
             box_type = order['package_code']
             snapshot = json.loads(order["sales_snapshot"] or "{}")
             shipping = order["delivery_cents"]/100 if order["delivery_cents"] is not None else order["final_shipping_cost"]
             
+            if order["sent_count"] and order["sent_count"] < order["parcel_count"]:
+                status_code = f"{self.t('partially_sent')} {order['sent_count']}/{order['parcel_count']}"
             formatted_data = {
                 'raw_id': order_id, 
                 'no': f"ORD-{order_id:05d}",
@@ -309,7 +311,7 @@ class OrdersView(QWidget):
                 'net': f"{order['net_cents']/100:.2f}" if order["net_cents"] is not None else "-",
                 'gross': f"{total_amount:.2f}", 
                 'pay': payment or "-", 
-                'pkg': box_type or "-", 
+                'pkg': box_type or snapshot.get('package_type') or "-",
                 'ship': f"{shipping:.2f}" if shipping is not None else "-",
                 'name': snapshot.get("customer_name",f"{first_name or ''} {last_name or ''}")
             }

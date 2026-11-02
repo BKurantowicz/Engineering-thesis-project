@@ -179,12 +179,21 @@ class MainWindow(QMainWindow):
         filters=[w.text() for w in (self.view_orders.search_id,self.view_orders.search_addr,self.view_orders.search_product,self.view_orders.search_channel)]
         period=self.view_orders.date_filter.currentData()
         limit=self.view_orders.limit_filter.currentData()
+        product_query=self.view_products.search_input.text()
+        bounds={k:w.text() for k,w in self.view_products.bounds.items()}
+        rack=self.view_products.location.currentData()
+        customer_query=self.view_customers.search_input.text()
+        chart_period=self.view_dashboard.time_filter.currentIndex()
+        scope=self.view_dashboard.capacity_scope.currentData()
+        list_id=self.view_picklists.lists.currentData()
+        today=self.view_picklists.today.isChecked()
         previous=self.takeCentralWidget()
         self.translator=translator(language,self.translator.directory)
         self.lang_code=language
         self.t=self.translator.t
         self.setWindowTitle(self.t("app_title","WMS System"))
         self.central_widget=QWidget()
+        self.central_widget.setObjectName("central_widget")
         self.setCentralWidget(self.central_widget)
         self.main_layout=QHBoxLayout(self.central_widget)
         self.main_layout.setContentsMargins(0,0,0,0)
@@ -198,6 +207,15 @@ class MainWindow(QMainWindow):
             w.setText(text)
         self.view_orders.date_filter.setCurrentIndex(self.view_orders.date_filter.findData(period))
         self.view_orders.limit_filter.setCurrentIndex(self.view_orders.limit_filter.findData(limit))
+        self.view_products.search_input.setText(product_query)
+        self.view_products.location.setCurrentIndex(max(0,self.view_products.location.findData(rack)))
+        for k,value in bounds.items():
+            self.view_products.bounds[k].setText(value)
+        self.view_customers.search_input.setText(customer_query)
+        self.view_dashboard.time_filter.setCurrentIndex(chart_period)
+        self.view_dashboard.capacity_scope.setCurrentIndex(max(0,self.view_dashboard.capacity_scope.findData(scope)))
+        self.view_picklists.today.setChecked(today)
+        self.view_picklists.reload_lists(list_id)
         previous.deleteLater()
 
     def open_dispatch(self,confirm):

@@ -4,7 +4,7 @@ def initialize_sales_schema(cursor):
         "products": {"ean":"TEXT"},
         "orders": {"channel": "TEXT", "external_ref": "TEXT", "sales_snapshot": "TEXT",
                    "net_cents": "INTEGER", "delivery_cents": "INTEGER", "held": "INTEGER NOT NULL DEFAULT 0"},
-        "order_shipments": {"dispatched_at": "TEXT", "package_id": "INTEGER REFERENCES packages(package_id)"},
+        "order_shipments": {"dispatched_at": "TEXT", "packing_token": "TEXT", "package_id": "INTEGER REFERENCES packages(package_id)"},
         "invoices": {"document": "TEXT"},
         "order_items": {"sale_snapshot": "TEXT"},
     }
@@ -16,6 +16,7 @@ def initialize_sales_schema(cursor):
     cursor.execute("""CREATE UNIQUE INDEX IF NOT EXISTS idx_order_channel_ref
                       ON orders(channel COLLATE NOCASE, external_ref COLLATE NOCASE)
                       WHERE external_ref IS NOT NULL AND external_ref != ''""")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS packing_request ON order_shipments(packing_token) WHERE packing_token IS NOT NULL")
     cursor.execute("""CREATE UNIQUE INDEX IF NOT EXISTS dispatch_package ON order_shipments(package_id)
                       WHERE package_id IS NOT NULL""")
     cursor.execute("""CREATE UNIQUE INDEX IF NOT EXISTS dispatch_tracking ON order_shipments(tracking_number)
@@ -28,4 +29,4 @@ def initialize_sales_schema(cursor):
     cursor.execute("""CREATE TABLE IF NOT EXISTS dispatch_mail (
         shipment_id INTEGER PRIMARY KEY REFERENCES order_shipments(shipment_id),
         recipient TEXT, message TEXT NOT NULL, invoice_id INTEGER REFERENCES invoices(invoice_id),
-        state TEXT NOT NULL DEFAULT 'pending', detail TEXT)""")
+        state TEXT NOT NULL DEFAULT 'pending', detail TEXT, claimed_at INTEGER)""")

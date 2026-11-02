@@ -44,7 +44,9 @@ class OrderController:
         
         if detailed:
             query = query.replace("o.delivery_city\n", """o.delivery_city, o.channel, o.external_ref, o.sales_snapshot,
-                o.net_cents, o.delivery_cents, o.held, sh.final_shipping_cost,
+                o.net_cents, o.delivery_cents, o.held, sh.final_shipping_cost, pm.name_en AS payment_en,
+                (SELECT COUNT(*) FROM order_shipments WHERE order_id=o.order_id AND package_id IS NOT NULL) AS parcel_count,
+                (SELECT COUNT(*) FROM order_shipments WHERE order_id=o.order_id AND dispatched_at IS NOT NULL) AS sent_count,
                 (SELECT MAX(dispatched_at) FROM order_shipments WHERE order_id=o.order_id) AS dispatched_at
             """, 1)
         params = []

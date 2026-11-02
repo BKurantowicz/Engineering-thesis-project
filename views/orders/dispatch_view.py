@@ -2,6 +2,7 @@
 import csv
 import json
 import sqlite3
+import uuid
 
 from PySide6.QtCore import QThread, QUrl, Qt, Signal
 from PySide6.QtGui import QDesktopServices
@@ -39,6 +40,7 @@ class DispatchDialog(QDialog):
         self.mail=DispatchMail(db_path)
         self.config=SettingsController().get_config()
         self.draft={}
+        self.token=uuid.uuid4().hex
         self.worker=None
         self.setWindowTitle(self.t("dispatch"))
         self.resize(950,620)
@@ -126,6 +128,7 @@ class DispatchDialog(QDialog):
 
     def clear_draft(self):
         self.draft.clear()
+        self.token=uuid.uuid4().hex
         self.refresh()
 
     def refresh(self):
@@ -157,7 +160,7 @@ class DispatchDialog(QDialog):
         self.refresh()
 
     def seal(self):
-        shipment=self.ctrl.add_parcel(self.orders.currentData(),self.box.currentData(),self.carrier.currentData(),self.draft)
+        shipment=self.ctrl.add_parcel(self.orders.currentData(),self.box.currentData(),self.carrier.currentData(),self.draft,self.token)
         self.clear_draft()
         self.message.setText(f"{self.t('dispatch_id')}: {shipment}")
         self.tabs.setCurrentIndex(1)

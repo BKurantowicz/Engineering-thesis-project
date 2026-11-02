@@ -20,7 +20,7 @@ def read_groups(path):
         raise ValueError("file_format")
     groups = {}
     for record in records:
-        row = {str(k):str(v or "").strip() if v is None else str(v).strip() for k,v in record.items()}
+        row = {str(k):"" if v is None else str(v).strip() for k,v in record.items()}
         key = (row.get("Platforma","").casefold(),row.get("Nr_Zewnetrzny","").casefold())
         groups.setdefault(key,[]).append(row)
     return groups

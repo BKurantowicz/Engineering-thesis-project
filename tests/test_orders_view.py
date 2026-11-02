@@ -112,7 +112,7 @@ class OrdersViewTests(unittest.TestCase):
         view = self.open_view()
         expected = [
             ["ORD-00101", self.dates[0][:16], "-", "NEW", "-", "123.00", "-", "-", "-", "Alice First"],
-            ["ORD-00102", self.dates[1][:16], "-", "SHIPPED", "-", "246.00", "Przelew", "INPOST_A", "14.99", "Bob Second"],
+            ["ORD-00102", self.dates[1][:16], "-", "SHIPPED", "-", "246.00", "Bank Transfer", "INPOST_A", "14.99", "Bob Second"],
             ["ORD-00103", self.dates[2][:16], "-", "IN_PROGRESS", "-", "73.80", "-", "-", "-", "Alice First"],
         ]
         actual = [[row.summary_layout.itemAt(i).widget().text() for i in range(row.summary_layout.count())] for row in self.rows(view)]

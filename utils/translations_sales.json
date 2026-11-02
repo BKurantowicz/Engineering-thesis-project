@@ -113,7 +113,11 @@
     "bdo": "BDO identifier",
     "saved_now": "Configuration saved.",
     "confirm_generation": "Reserve the selected goods and generate this pick list?",
-    "skip_prompt": "Do not ask again when generating a list"
+    "skip_prompt": "Do not ask again when generating a list",
+    "partially_sent": "Partially dispatched",
+    "sending": "Sending",
+    "filter_date": "Date range",
+    "units_short": "pcs"
   },
   "pl": {
     "sale_order": "Wprowadzanie zamówienia",
@@ -229,6 +233,10 @@
     "bdo": "Numer BDO",
     "saved_now": "Zapisano ustawienia.",
     "confirm_generation": "Zarezerwować wskazany towar i utworzyć listę poboru?",
-    "skip_prompt": "Nie pytaj ponownie przy tworzeniu listy"
+    "skip_prompt": "Nie pytaj ponownie przy tworzeniu listy",
+    "partially_sent": "Częściowo nadane",
+    "sending": "Wysyłanie",
+    "filter_date": "Zakres dat",
+    "units_short": "szt."
   }
 }

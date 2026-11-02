@@ -3,6 +3,7 @@ import json
 import os
 import smtplib
 import ssl
+import time
 from contextlib import closing
 from email.message import EmailMessage
 from html import escape
@@ -84,10 +85,15 @@ class DispatchMail:
         with closing(connect(self.db_path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
             job = db.execute("SELECT * FROM dispatch_mail WHERE shipment_id=?",(shipment_id,)).fetchone()
+            if job and job["state"]=="sending":
+                if (job["claimed_at"] or 0) > time.time()-900:
+                    return "sending"
+                db.execute("UPDATE dispatch_mail SET state='uncertain' WHERE shipment_id=?", (shipment_id,))
+                return "uncertain"
             if not job or job["state"] not in states:
                 return job["state"] if job else "no_email"
             # A process interrupted after claiming the job leaves an explicit uncertain result.
-            db.execute("UPDATE dispatch_mail SET state='uncertain',detail=NULL WHERE shipment_id=?",(shipment_id,))
+            db.execute("UPDATE dispatch_mail SET state='sending',claimed_at=?,detail=NULL WHERE shipment_id=?",(int(time.time()),shipment_id))
         smtp=None
         submitted=False
         try:

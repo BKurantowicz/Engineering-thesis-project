@@ -40,9 +40,13 @@ class DispatchController:
         with closing(connect(self.db_path)) as db:
             return self.items(db,order_id)
 
-    def add_parcel(self, order_id, package_type, carrier_id, counts):
+    def add_parcel(self, order_id, package_type, carrier_id, counts, token=None):
         with closing(connect(self.db_path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
+            if token:
+                existing=db.execute("SELECT shipment_id FROM order_shipments WHERE order_id=? AND packing_token=?",(order_id,token)).fetchone()
+                if existing:
+                    return existing[0]
             if not self.eligible(db,order_id):
                 raise ValueError("packing_locked")
             if not counts or any(type(n) is not int or n<=0 for n in counts.values()):
@@ -60,8 +64,8 @@ class DispatchController:
             parcel = db.execute("INSERT INTO packages(order_id,package_code,actual_weight) VALUES(?,?,?)",
                                 (order_id,package_type,weight)).lastrowid
             db.executemany("INSERT INTO parcel_contents VALUES(?,?,?)",[(parcel,k,n) for k,n in counts.items()])
-            dispatch = db.execute("""INSERT INTO order_shipments(order_id,shipping_type_id,package_code,final_shipping_cost,package_id)
-                        VALUES(?,?,?,?,?)""",(order_id,carrier_id,package_type,box["base_cost"],parcel)).lastrowid
+            dispatch = db.execute("""INSERT INTO order_shipments(order_id,shipping_type_id,package_code,final_shipping_cost,package_id,packing_token)
+                        VALUES(?,?,?,?,?,?)""",(order_id,carrier_id,package_type,box["base_cost"],parcel,token)).lastrowid
             if all(i["remaining"]==counts.get(k,0) for k,i in items.items()):
                 db.execute("UPDATE orders SET status_code='PACKED' WHERE order_id=?",(order_id,))
             return dispatch
