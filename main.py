@@ -114,6 +114,8 @@ class MainWindow(QMainWindow):
         self.btn_orders.clicked.connect(lambda: self.orders_submenu.setVisible(not self.orders_submenu.isVisible()))
         self.btn_sub_overview.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
         self.btn_sub_picklists.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.view_picklists))
+        self.btn_sub_packing.clicked.connect(lambda: self.open_dispatch(False))
+        self.btn_sub_confirm.clicked.connect(lambda: self.open_dispatch(True))
         self.btn_sub_lists.clicked.connect(self.show_shift)
         self.btn_products.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
         self.btn_customers.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.view_customers))
@@ -160,6 +162,11 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.view_picklists)
 
         self.main_layout.addWidget(self.stacked_widget)
+
+    def open_dispatch(self,confirm):
+        from views.orders.dispatch_view import DispatchDialog
+        DispatchDialog(self.translator,self.db_path,parent=self,confirm=confirm).exec()
+        self.refresh_warehouse_views()
 
     def show_shift(self):
         self.view_picklists.today.setChecked(True)
