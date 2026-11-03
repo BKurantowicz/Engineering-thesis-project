@@ -15,6 +15,8 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from unittest.mock import patch
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from controllers.customer_controller import CustomerController
 from controllers.dispatch_controller import DispatchController
@@ -219,8 +221,11 @@ class SalesDispatchTests(unittest.TestCase):
         dialog.scan.setText("A")
         dialog.scan_one()
         self.assertFalse(dialog.draft)
-        dialog.scan.setText(self.data["ean"])
-        dialog.scan_one()
+        dialog.show()
+        dialog.scan.setFocus()
+        QTest.keyClicks(dialog.scan,self.data["ean"])
+        QTest.keyClick(dialog.scan,Qt.Key_Return)
+        self.assertEqual(dialog.message.text(),"")
         self.assertEqual(sum(dialog.draft.values()),1)
         dialog.seal()
         self.assertEqual(len(self.ship.parcels(oid)),1)

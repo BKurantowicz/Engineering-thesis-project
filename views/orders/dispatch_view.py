@@ -105,6 +105,7 @@ class DispatchDialog(QDialog):
 
     def button(self,layout,key,slot):
         button=QPushButton(self.t(key,key))
+        button.setAutoDefault(False)
         button.clicked.connect(lambda: self.guarded(slot))
         layout.addWidget(button)
 
@@ -148,6 +149,8 @@ class DispatchDialog(QDialog):
 
     def scan_one(self):
         code=self.scan.text().strip().casefold()
+        if not code:
+            return
         self.scan.clear()
         matches=[i for i in self.items if code and code in (i["sku"].casefold(),i["ean"])]
         available=[i for i in matches if i["remaining"]>self.draft.get(i["item_id"],0)]

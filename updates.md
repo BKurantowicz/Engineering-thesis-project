@@ -12,6 +12,7 @@ versions. Commits and merges alone do not establish that a release occurred.
 ### 2026-11-03 — Review corrections for order snapshots, imports and dispatch
 
 - Preserve the original product and customer descriptions when an operator edits an existing sale. Match complete recipient names and compare marketplace identities with the same Unicode rules used by the import preview.
+- A keyboard scanner submitting Enter records one unit and clears the previous warning.
 - Normalize dispatch IDs before classifying conflicting tracking assignments. Recheck stored email outcomes and require acknowledgement for each uncertain message before retry.
 
 ### 2026-11-03 — Demo orders with transaction VAT
