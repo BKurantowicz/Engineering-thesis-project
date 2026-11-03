@@ -107,7 +107,7 @@ class OrderDialog(QDialog):
             self.table.removeRow(self.table.currentRow())
             self.recalculate()
 
-    def add_line(self,p,qty,unit,rate):
+    def add_line(self,p,qty,unit,rate,item_id=None):
         row = self.table.rowCount()
         self.table.blockSignals(True)
         self.table.insertRow(row)
@@ -115,13 +115,14 @@ class OrderDialog(QDialog):
             cell = QTableWidgetItem(str(value))
             if col == 0:
                 cell.setData(Qt.UserRole,p["product_id"])
+                cell.setData(Qt.UserRole+1,item_id)
                 cell.setFlags(cell.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(row,col,cell)
         self.table.blockSignals(False)
         self.recalculate()
 
     def lines(self):
-        return [dict(product_id=self.table.item(r,0).data(Qt.UserRole),quantity=self.table.item(r,1).text(),
+        return [dict(product_id=self.table.item(r,0).data(Qt.UserRole),item_id=self.table.item(r,0).data(Qt.UserRole+1),quantity=self.table.item(r,1).text(),
                      unit=self.table.item(r,2).text(),vat=self.table.item(r,3).text()) for r in range(self.table.rowCount())]
 
     def recalculate(self):
@@ -143,10 +144,11 @@ class OrderDialog(QDialog):
             if isinstance(self.fields.get(key),QLineEdit):
                 self.fields[key].setText(str(value or ""))
         for item in items:
-            p = next((p for p in self.products if p["product_id"]==item["product_id"]),None)
+            saved=json.loads(item["sale_snapshot"] or "{}")
+            p = saved or next((p for p in self.products if p["product_id"]==item["product_id"]),None)
             if not p:
                 raise ValueError("product")
-            self.add_line(p,item["quantity"],item["unit_price"],json.loads(item["sale_snapshot"] or "{}").get("vat",""))
+            self.add_line(p,item["quantity"],item["unit_price"],saved.get("vat",""),item["item_id"])
 
     def save(self):
         fields = {k:(w.currentData() if isinstance(w,QComboBox) else w.text().strip()) for k,w in self.fields.items()}

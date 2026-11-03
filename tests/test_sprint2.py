@@ -14,7 +14,8 @@ import threading
 import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PySide6.QtWidgets import QApplication
+from unittest.mock import patch
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from controllers.customer_controller import CustomerController
 from controllers.dispatch_controller import DispatchController
 from controllers.dispatch_mail import DispatchMail, invoice_pdf
@@ -171,6 +172,46 @@ class SalesDispatchTests(unittest.TestCase):
         self.assertEqual(len(OrderController(self.path).get_orders()),1)
         invoice=self.mail.invoice_for(oid)
         self.assertTrue(invoice_pdf(self.path,invoice,self.root,self.lang).exists())
+
+    def test_order_edit_keeps_original_product_snapshot(self):
+        oid=self.sales.save(self.header,self.lines)
+        self.product.save_product(dict(self.data,sku="RENAMED",name_pl="Inna nazwa",weight=2),self.pid)
+        dialog=OrderDialog(self.lang,self.sales,oid)
+        self.assertEqual(dialog.table.item(0,0).text(),"SKU-A")
+        dialog.save()
+        self.assertEqual(dialog.result(),QDialog.Accepted)
+        saved=json.loads(self.sales.details(oid)[1][0]["sale_snapshot"])
+        self.assertEqual((saved["sku"],saved["name_pl"],saved["weight"]),("SKU-A","Łącznik",1))
+        dialog.close()
+
+    def test_stale_preview_requires_current_uncertain_delivery_acknowledgement(self):
+        oid,item=self.picked()
+        shipment=self.ship.add_parcel(oid,"INPOST_A",1,{item:3})
+        self.ship.confirm((f"ORD-{oid}",str(shipment),"TEST-1"),{},"pl")
+        dlg=DispatchDialog(self.lang,self.path,oid)
+        dlg.parcel_table.selectRow(0)
+        self.sql("UPDATE dispatch_mail SET state='uncertain' WHERE shipment_id=?",(shipment,))
+        with patch.object(QMessageBox,"question",return_value=QMessageBox.No) as confirm, patch.object(dlg,"send") as send:
+            dlg.retry()
+            confirm.assert_called_once()
+            send.assert_not_called()
+        dlg.close()
+
+    def test_recipient_search_and_unicode_reference_identity(self):
+        recipient=dict(self.header["recipient"],first_name="New",last_name="Recipient")
+        oid=self.sales.save(dict(self.header,channel="Straße",recipient=recipient),self.lines)
+        found=OrderController(self.path).get_orders(destination="new recipient")
+        self.assertEqual([r["order_id"] for r in found],[oid])
+        with self.assertRaisesRegex(ValueError,"duplicate"):
+            self.sales.save(dict(self.header,channel="STRASSE"),self.lines)
+
+    def test_duplicate_dispatch_spellings_reject_conflicts_before_writes(self):
+        oid,item=self.picked()
+        dispatch=self.ship.add_parcel(oid,"INPOST_A",1,{item:3})
+        path=self.root/"carrier.csv"
+        path.write_text(f"order_ref;dispatch_id;tracking\nORD-{oid};{dispatch};A\nORD-{oid:05d};0{dispatch};B\n",encoding="utf8")
+        self.assertEqual([state for _,state in self.ship.preview(path)],["tracking_conflict","tracking_conflict"])
+        self.assertEqual(self.sql("SELECT tracking_number FROM order_shipments"),[(None,)])
 
     def test_dialog_scan_rejects_suffix_and_reuses_identifier(self):
         oid,_=self.picked()

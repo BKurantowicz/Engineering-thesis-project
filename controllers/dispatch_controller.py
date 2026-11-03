@@ -147,22 +147,25 @@ class DispatchController:
             rows = [tuple((r[k] or "").strip() for k in ("order_ref","dispatch_id","tracking")) for r in reader]
         by_dispatch,by_tracking={},{}
         for ref,d,t in rows:
-            by_dispatch.setdefault(d,set()).add((ref,t))
-            by_tracking.setdefault(t,set()).add(d)
+            key = d.lstrip("0") or "0"
+            order_key = ref.upper().removeprefix("ORD-").lstrip("0") or "0"
+            by_dispatch.setdefault(key,set()).add((order_key,t))
+            by_tracking.setdefault(t,set()).add(key)
         result,seen=[],set()
         with closing(connect(self.db_path)) as db:
             for record in rows:
                 ref,d,t=record
                 try:
                     _,state=self.check(db,*record)
-                    if len(by_dispatch[d])>1 or len(by_tracking[t])>1:
+                    key = d.lstrip("0") or "0"
+                    if len(by_dispatch[key])>1 or len(by_tracking[t])>1:
                         state="tracking_conflict"
-                    elif record in seen:
+                    elif (key,t) in seen:
                         state="duplicate"
                 except ValueError as error:
                     state=str(error)
                 result.append((record,state))
-                seen.add(record)
+                seen.add((d.lstrip("0") or "0",t))
         return result
 
     def confirm(self,record,company,lang):

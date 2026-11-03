@@ -20,12 +20,12 @@ class MailWorker(QThread):
     def __init__(self,db_path,ids,config,translator,uncertain,parent):
         super().__init__(parent)
         self.mail=DispatchMail(db_path)
-        self.ids,self.config,self.translator,self.uncertain=ids,config,translator,uncertain
+        self.ids,self.config,self.translator,self.uncertain=ids,config,translator,set(uncertain)
 
     def run(self):
         for shipment in self.ids:
             try:
-                state=self.mail.send(shipment,self.config,self.translator,self.uncertain)
+                state=self.mail.send(shipment,self.config,self.translator,shipment in self.uncertain)
             except (OSError,ValueError,sqlite3.Error):
                 state="uncertain"
             self.result.emit(shipment,state)
@@ -221,12 +221,14 @@ class DispatchDialog(QDialog):
 
     def retry(self):
         selected=self.selection()
-        if any(p["mail_state"]=="uncertain" for p in selected):
+        ids=[p["shipment_id"] for p in selected]
+        uncertain=[sid for sid in ids if (self.mail.get(sid) or {}).get("state")=="uncertain"]
+        if uncertain:
             if QMessageBox.question(self,self.t("uncertain"),self.t("retry_uncertain"))!=QMessageBox.Yes:
                 return
-        self.send([p["shipment_id"] for p in selected],True)
+        self.send(ids,uncertain)
 
-    def send(self,ids,uncertain=False):
+    def send(self,ids,uncertain=()):
         if not ids or self.worker and self.worker.isRunning():
             return
         self.worker=MailWorker(self.db_path,ids,self.config,self.translator,uncertain,self)

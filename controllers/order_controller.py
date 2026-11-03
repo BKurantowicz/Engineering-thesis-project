@@ -53,7 +53,7 @@ class OrderController:
         for term, columns in (
             (identity, ["printf('ORD-%05d',o.order_id)", "o.status_code", "o.external_ref", "c.first_name || ' ' || c.last_name",
                         "json_extract(o.sales_snapshot,'$.customer_name')"]),
-            (destination, ["o.delivery_name","o.delivery_second_name","o.delivery_street","o.delivery_postal_code","o.delivery_city",
+            (destination, ["trim(COALESCE(o.delivery_name,'') || ' ' || COALESCE(o.delivery_second_name,''))", "o.delivery_name","o.delivery_second_name","o.delivery_street","o.delivery_postal_code","o.delivery_city",
                            "c.first_name || ' ' || c.last_name"]),
         ):
             if term:

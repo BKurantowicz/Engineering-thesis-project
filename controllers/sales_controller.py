@@ -76,14 +76,17 @@ class SalesController:
     def save(self, header, lines, order_id=None, new_customer=None, importing=False):
         with closing(connect(self.db_path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
+            previous_header = {}
             if order_id is not None:
-                self.editable(db, order_id)
+                previous_header = json.loads(self.editable(db, order_id)["sales_snapshot"] or "{}")
             channel = header.get("channel", "").strip()
             reference = header.get("external_ref", "").strip()
             if not channel or importing and not reference:
                 raise ValueError("identity")
-            if reference and db.execute("""SELECT 1 FROM orders WHERE channel=? COLLATE NOCASE
-                    AND external_ref=? COLLATE NOCASE AND order_id != ?""", (channel, reference, order_id or -1)).fetchone():
+            db.create_function("casefold", 1, lambda value: (value or "").strip().casefold())
+            if reference and db.execute("""SELECT 1 FROM orders WHERE casefold(channel)=?
+                    AND casefold(external_ref)=? AND order_id != ?""",
+                    (channel.casefold(), reference.casefold(), order_id or -1)).fetchone():
                 raise ValueError("duplicate")
             customer_id = header.get("customer_id")
             if new_customer is not None:
@@ -111,13 +114,19 @@ class SalesController:
                 if not db.execute(f"SELECT 1 FROM {table} WHERE {key}=?", (header.get(field),)).fetchone():
                     raise ValueError(field)
             delivery = priced_line(1, header["delivery"], header["delivery_vat"])
+            original = {r["item_id"]: r for r in db.execute(
+                "SELECT item_id, product_id, sale_snapshot FROM order_items WHERE order_id=?", (order_id,))}
             snapshots = []
             for item in lines:
                 product = db.execute("SELECT * FROM products WHERE product_id=? AND is_active=1", (item["product_id"],)).fetchone()
                 if not product:
                     raise ValueError("product")
                 saved = priced_line(item["quantity"], item["unit"], item["vat"])
-                saved.update({k: product[k] for k in ("product_id","sku","name_pl","name_en","weight")})
+                prior = original.pop(item.get("item_id"), None)
+                if item.get("item_id") is not None and (not prior or prior["product_id"] != product["product_id"]):
+                    raise ValueError("product")
+                source = json.loads(prior["sale_snapshot"]) if prior and prior["sale_snapshot"] else product
+                saved.update({k: source[k] for k in ("product_id","sku","name_pl","name_en","weight")})
                 snapshots.append(saved)
             if not snapshots:
                 raise ValueError("basket")
@@ -127,6 +136,8 @@ class SalesController:
                 raise ValueError("price")
             snapshot = dict(header, recipient=recipient, customer_id=customer_id, delivery_line=delivery,
                             customer_name=f"{customer['first_name']} {customer['last_name']}")
+            if previous_header.get("customer_id") == customer_id:
+                snapshot["customer_name"] = previous_header.get("customer_name", snapshot["customer_name"])
             values = dict(customer_id=customer_id, payment_method_id=header["payment"], total_amount=gross/100,
                           delivery_name=recipient["first_name"], delivery_second_name=recipient["last_name"],
                           delivery_street=recipient["street"], delivery_postal_code=recipient["postal_code"],
