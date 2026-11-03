@@ -2,6 +2,7 @@
 
 from contextlib import closing
 import gc
+import json
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -47,6 +48,16 @@ class DemoSeedTests(unittest.TestCase):
             for row in InventoryController(str(self.path)).stock_snapshot(connection):
                 self.assertLessEqual(row["reserved"], row["quantity"])
                 self.assertNotEqual(row["location_code"], "braki")
+        with closing(connect(str(self.path))) as db:
+            for order in db.execute("SELECT * FROM orders"):
+                delivery = json.loads(order["sales_snapshot"])["delivery_line"]
+                self.assertEqual((delivery["vat"], delivery["net_cents"], delivery["gross_cents"]), ("8", 1000, 1080))
+                prices = [json.loads(r[0]) for r in db.execute(
+                    "SELECT sale_snapshot FROM order_items WHERE order_id=?", (order["order_id"],))]
+                self.assertTrue(prices)
+                self.assertTrue(all(line["vat"] == "23" for line in prices))
+                self.assertEqual(order["net_cents"], sum(line["net_cents"] for line in prices) + delivery["net_cents"])
+                self.assertEqual(round(order["total_amount"]*100), sum(line["gross_cents"] for line in prices) + delivery["gross_cents"])
         counts = self.counts()
         self.assertEqual(seed_demo(self.path, replace_mock=True), ids)
         self.assertEqual(self.counts(), counts)

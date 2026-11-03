@@ -3,7 +3,7 @@
 ## Project Overview
 
 This engineering thesis project is a Python/PySide6 desktop application for store
-and warehouse operations. It provides an order browser, customer and product
+and warehouse operations. It provides order entry and import, parcel packing and dispatch, invoices and shipment mail, customer and product
 maintenance, physical stock capacity checks, persistent picking workflows,
 shortage reconciliation, dashboard analytics, and application settings. SQLite
 stores business data; JSON stores configuration. English and Polish interfaces
@@ -24,13 +24,86 @@ application and its operational limits.
 - Inspect virtual missing-stock history and independent kg/m³ utilization.
 - Save company settings, appearance, localization, paths, and preferences.
 
-Order creation/import UI, packing, shipment purchasing, invoice generation,
-account/login assignment, and route optimization are not implemented. Existing
-Add/Import/detail-action and other order submenu placeholders do not constitute
-those workflows. Language changes require restart; some older order UI/data
-labels still use fixed-language values. Backup/notification/path-browse controls
-do not establish implemented operational services. Rack limits are stored data;
-a rack-management form is not included.
+Operators can enter, import and maintain eligible orders, pack fully picked goods,
+export parcels, confirm tracking and retrieve the final invoice. Carrier label
+purchasing, merchandise returns, user assignment, operational backups, route
+optimization and rack administration remain outside these workflows.
+
+## From order entry to delivery
+
+1. In **Orders > Overview > Add**, select an active customer, enter the channel,
+   recipient and country, choose payment, carrier and parcel type, then add active
+   products by SKU/name. The separate billing tab is optional. Record each line's
+   gross unit price and VAT, and the final delivery charge and VAT. Save creates
+   a NEW order without reserving stock. Manual orders can omit the external
+   reference. Search by ID/status/customer/reference, destination, product and
+   channel in combination with the date filter and result limit.
+2. Net is calculated per whole line, rounded half-up to PLN 0.01. VAT is gross
+   minus rounded net. Two units at PLN 12.30 (23%) plus PLN 10.80 delivery (8%)
+   yield PLN 30.00 net, PLN 5.40 VAT and PLN 35.40 gross. Historical rows without
+   transaction tax data show an unavailable value. New orders retain transaction
+   prices, recipient, billing and product snapshots.
+3. Use **Edit**, **Hold/Resume** and **Cancel** on NEW orders before allocation.
+   Hold excludes the order from generation. Cancellation retains its history.
+   Existing reservations, picking, shortages and physical returns use the
+   warehouse rules below. **My Lists** shows today's active lists and progress.
+   **Printable pick list** opens a worksheet with physical rack allocations.
+4. Close the handled pick list, open **Packing**, select the fully picked order,
+   parcel type and carrier, then scan exact SKUs or EAN-13 codes. Save each parcel
+   with its contents. The order becomes PACKED after all units have been assigned.
+   The operator can distribute it across multiple parcels and dispatch them on
+   different days. Packing leaves warehouse stock and reservations untouched.
+5. Select ready parcels and **Export**. The application writes one UTF-8
+   semicolon CSV per carrier under the configured carrier export directory.
+   A carrier confirmation file has a header and one row per dispatch, for example:
+
+   ```csv
+   order_ref;dispatch_id;tracking
+   ORD-00042;81;TEST-A
+   ORD-00042;83;TEST-B
+   ```
+
+   Use actual IDs from the export. Preview the file under **Confirmations** and
+   confirm the valid rows. A repeated order number is valid. Repeated confirmations
+   do not create another shipment, invoice or message. Wrong order/dispatch pairs
+   and tracking conflicts are reported. Orders shows progress between dispatches.
+6. Each confirmation queues a message to the order contact. The last dispatch
+   records the single whole-order invoice and its seller, buyer, items and delivery
+   snapshots. It attaches the PDF to the final message. Earlier messages contain
+   tracking only. Select the parcel in **Confirmations** or **Packages** to preview
+   mail, reopen the invoice PDF or retry a failed send. An uncertain SMTP outcome
+   requires checking the sender's mailbox before an explicit resend.
+
+### Order file format
+
+**Import** accepts UTF-8 semicolon CSV with a header, or a JSON object/array using
+the same keys. Each record represents one line. Use the product SKU and dictionary
+values from the target database. The grouping and duplicate key is the pair
+`Platforma`, `Nr_Zewnetrzny`. An example with current demonstration dictionary values:
+
+```csv
+Platforma;Nr_Zewnetrzny;Imie;Nazwisko;Ulica;Kod_Pocztowy;Miasto;Kraj;Email;Kurier;Typ_Wysylki;Platnosc;Koszt_Wysylki;VAT_Wysylki;SKU;Ilosc;Cena_Sztuka;VAT
+Shop;WEB-42;Anna;Nowak;Długa 1;00-001;Warszawa;PL;;InPost;INPOST_A;BLIK;10.80;8;YOUR-SKU;2;12.30;23
+```
+
+Replace YOUR-SKU with an active catalogue SKU. Use Nr_Domu and Telefon when
+supplied. Optional billing fields include Firma, NIP, Faktura_Ulica, Faktura_Kod,
+Faktura_Miasto and Faktura_Kraj. The preview counts orders and lines. Without
+email, select an active customer or explicitly create one. A rejected group is
+rolled back in full. Other valid orders may still be imported.
+
+### Outbound SMTP and settings
+
+Configure the sender, host, port, username and TLS/STARTTLS under Company Data.
+Enter a new SMTP password and save. On Windows, the application encrypts it with
+per-user DPAPI and stores the encrypted credential in user settings. Application
+configuration keeps its reference. WMS_SMTP_PASSWORD is an alternative for a
+configured account without a saved credential. LOCAL transport is limited to a
+loopback test receiver. A successful send means the SMTP server accepted the
+message. Directory pickers cover the database, pick worksheets, carrier CSVs,
+invoices and imports. The database changes on restart. Language and fullscreen
+settings apply on save. Optional list-generation confirmations can be restored
+in System settings. Seller bank and BDO fields are optional.
 
 ## Technology and Structure
 
@@ -161,9 +234,7 @@ orders. Referenced customers remain unchanged and can be deactivated instead.
 New orders for an inactive customer are rejected by `OrderController.add_order`
 and a SQLite insertion trigger. A separate trigger protects referenced customers
 from deletion, including connections with foreign-key checks disabled. These
-guards do not block updates or fulfillment of already-existing orders. The
-current Orders screen remains a browsing interface; a new-order form is not
-introduced by customer maintenance.
+guards do not block fulfillment of already-existing orders. Order entry and import also validate active customers and products.
 
 The isolated regression suite covers legacy migration, optional contacts, case
 variants and concurrent duplicate attempts, preserved history, localized forms,
@@ -257,6 +328,8 @@ only after generation succeeds. Existing targets are refused without the flag;
 active SQLite sidecars prevent replacement. Startup never seeds destructively.
 Choose `demo.db` in the configured database path and restart to view it.
 
+Demo orders include saved line VAT (23%) and delivery VAT (8%). A new, unallocated order is available for editing. The fully picked example can proceed directly to packing and invoicing. These rates are sample inputs.
+
 The dataset includes five plausible products, three customers, three physical
 racks (500 kg/1 m³, 750 kg/1.5 m³, 500 kg/1 m³), an open list, partially picked
 list, closed list, and a shortage-cancelled example with returned goods and virtual
@@ -279,7 +352,7 @@ New charts and refreshed capacity values also use the active theme.
 on Save. Object-name rules replace local widget stylesheets. Dropdown popups use
 styled item delegates and explicit text/selection colors, including after
 switching back to Light. Existing filters, navigation, and Settings bindings are
-preserved; language changes still require a restart.
+preserved. Saving a new language updates the open window.
 
 The regression command below also checks runtime theme switches in the complete
 window with temporary database/configuration fixtures, including English/Polish
@@ -336,7 +409,7 @@ application rather than its chronological history.
 Views use controllers for persistence and share the translator/theme manager.
 InventoryController is the common physical-write/capacity guard; picking and
 shortage controllers operate within SQLite write transactions. DatabaseManager
-initializes tables and calls the additive warehouse schema initializer.
+initializes tables and calls the additive warehouse and sales schema initializers.
 
 ```mermaid
 classDiagram
@@ -428,6 +501,7 @@ erDiagram
         datetime created_at "nullable"
     }
     INVOICES {
+        string document "nullable immutable snapshot"
         int invoice_id PK
         int order_id FK "nullable"
         string invoice_number UK
@@ -448,6 +522,7 @@ erDiagram
         int is_virtual
     }
     ORDER_ITEMS {
+        string sale_snapshot "nullable"
         int item_id PK
         int order_id FK "nullable"
         int product_id FK "nullable"
@@ -455,6 +530,9 @@ erDiagram
         float unit_price
     }
     ORDER_SHIPMENTS {
+        int package_id FK "nullable, unique when linked"
+        string dispatched_at "nullable"
+        string packing_token "nullable, unique for retries"
         int shipment_id PK
         int order_id FK
         int shipping_type_id FK
@@ -463,6 +541,12 @@ erDiagram
         float final_shipping_cost
     }
     ORDERS {
+        string channel
+        string external_ref
+        string sales_snapshot
+        int net_cents
+        int delivery_cents
+        int held
         int order_id PK
         int customer_id FK "nullable"
         string status_code FK "nullable"
@@ -476,6 +560,20 @@ erDiagram
         string delivery_postal_code "nullable"
         string delivery_city "nullable"
         string cancellation_reason "nullable"
+    }
+    PARCEL_CONTENTS {
+        int package_id PK, FK
+        int item_id PK, FK
+        int quantity
+    }
+    DISPATCH_MAIL {
+        int shipment_id PK, FK
+        string recipient
+        string message
+        int invoice_id FK
+        string state
+        string detail
+        int claimed_at
     }
     PACKAGES {
         int package_id PK
@@ -509,6 +607,7 @@ erDiagram
         datetime created_at "nullable"
     }
     PRODUCTS {
+        string ean "optional EAN-13"
         int product_id PK
         string sku UK
         string name_pl
@@ -557,6 +656,11 @@ erDiagram
     DICT_ORDER_STATUSES |o--o{ ORDERS : "status_code"
     CUSTOMERS |o--o{ ORDERS : "customer_id"
     DICT_PACKAGE_TYPES ||--o{ PACKAGES : "package_code"
+    PACKAGES ||--o| ORDER_SHIPMENTS : "package_id"
+    PACKAGES ||--o{ PARCEL_CONTENTS : "package_id"
+    ORDER_ITEMS ||--o{ PARCEL_CONTENTS : "item_id"
+    ORDER_SHIPMENTS ||--o| DISPATCH_MAIL : "shipment_id"
+    INVOICES |o--o{ DISPATCH_MAIL : "invoice_id"
     ORDERS ||--o{ PACKAGES : "order_id"
     LOCATIONS ||--o{ PICK_ALLOCATIONS : "location_id"
     PRODUCTS ||--o{ PICK_ALLOCATIONS : "product_id"
@@ -586,8 +690,7 @@ erDiagram
   physical inventory. The allocation `cancelled` flag also identifies a resolved
   source allocation replaced during reconciliation, independently of order status.
 - Delivery fields live on orders; billing fields live on invoices. Master-data
-  edits do not overwrite those snapshots. Shipment/package/invoice schema alone
-  does not imply completed UI workflows.
+  edits do not overwrite those snapshots. Each packed parcel has a stable dispatch ID.
 - Explicit transactional checks and lifecycle triggers protect business data.
   Existing connections do not enable every SQLite foreign-key constraint;
   external writers must respect all references, capacity, reservation, and

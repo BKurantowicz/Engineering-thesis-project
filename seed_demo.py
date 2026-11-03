@@ -10,7 +10,7 @@ import sqlite3
 import tempfile
 
 from controllers.customer_controller import CustomerController
-from controllers.order_controller import OrderController
+from controllers.sales_controller import SalesController
 from controllers.pick_list_controller import PickListController
 from controllers.product_controller import ProductController
 from controllers.shortage_controller import ShortageController
@@ -21,7 +21,7 @@ def build_demo(db_path):
     DatabaseManager(str(db_path))
     customers = CustomerController(str(db_path))
     products = ProductController(str(db_path))
-    orders = OrderController(str(db_path))
+    orders = SalesController(str(db_path))
     picking = PickListController(str(db_path))
     with closing(sqlite3.connect(db_path)) as connection, connection:
         connection.executemany("INSERT INTO locations (location_id, location_code, max_weight, max_volume) VALUES (?, ?, ?, ?)",
@@ -44,18 +44,28 @@ def build_demo(db_path):
     laptop, keyboard, monitor, cable, dock = product_ids
     for product_id, location_id, quantity in ((laptop, 1, 20), (laptop, 2, 10), (keyboard, 1, 25), (monitor, 2, 20), (cable, 1, 40), (dock, 3, 1)):
         products.inventory.add_stock(product_id, location_id, quantity)
-    def make_list(customer_id, demands, days_ago):
-        total = sum(products.get_product(product_id)["price"] * quantity for product_id, quantity, _ in demands)
-        customer = customers.get_customer(customer_id)
-        order_id = orders.add_order(customer_id, 1, None, total, {"name": customer["first_name"], "second_name": customer["last_name"], "street": customer["street"], "postal_code": customer["postal_code"], "city": customer["city"]})
-        allocations = []
+    def make_order(customer_id, demands, days_ago):
+        recipient = dict(customers.get_customer(customer_id))
+        recipient["country"] = "GB" if recipient["city"] == "London" else "PL"
+        header = dict(customer_id=customer_id, recipient=recipient, billing={},
+                      payment=1, carrier=1, package_type="INPOST_A", channel="Demo shop",
+                      external_ref=f"DEMO-{customer_id}-{days_ago}", delivery="10.80", delivery_vat="8")
+        lines = [dict(product_id=pid, quantity=qty, unit=products.get_product(pid)["price"], vat="23")
+                 for pid, qty, _ in demands]
+        order_id = orders.save(header, lines)
         with closing(sqlite3.connect(db_path)) as connection, connection:
-            connection.execute("UPDATE orders SET order_date = ? WHERE order_id = ?", ((datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d %H:%M:%S"), order_id))
-            for product_id, quantity, location_id in demands:
-                item_id = connection.execute("INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)",
-                                             (order_id, product_id, quantity, products.get_product(product_id)["price"])).lastrowid
-                allocations.append(dict(order_item_id=item_id, location_id=location_id, quantity=quantity))
+            connection.execute("UPDATE orders SET order_date=? WHERE order_id=?",
+                               ((datetime.now()-timedelta(days=days_ago)).isoformat(sep=" ", timespec="seconds"), order_id))
+        return order_id
+
+    def make_list(customer_id, demands, days_ago):
+        order_id = make_order(customer_id, demands, days_ago)
+        _, items = orders.details(order_id)
+        allocations = [dict(order_item_id=item["item_id"], location_id=rack, quantity=qty)
+                       for item, (_, qty, rack) in zip(items, demands, strict=True)]
         return picking.create_list([order_id], allocations)
+
+    make_order(customer_ids[1], [(cable, 2, 1)], 0)
     open_id = make_list(customer_ids[0], [(laptop, 2, 1), (keyboard, 1, 1)], 3)
     partial_id = make_list(customer_ids[1], [(monitor, 2, 2), (cable, 3, 1)], 2)
     picking.start_list(partial_id)
