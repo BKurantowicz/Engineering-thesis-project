@@ -4,6 +4,14 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 
+import csv
+import json
+import sqlite3
+from PySide6.QtWidgets import QDialog, QFileDialog, QInputDialog, QMessageBox
+from controllers.sales_controller import SalesController
+from controllers.order_import import read_groups, import_group
+from controllers.settings_controller import SettingsController
+from views.orders.order_dialog import OrderDialog
 from utils.translations import translator
 from controllers.order_controller import OrderController
 
@@ -29,7 +37,7 @@ class ClickableRow(QFrame):
 
 
 class OrderAccordionItem(QWidget):
-    def __init__(self, order_data, translator_obj, controller, parent=None):
+    def __init__(self, order_data, translator_obj, controller, parent=None, action=None):
         super().__init__(parent)
         self.t = translator_obj.t
         self.controller = controller
@@ -73,8 +81,12 @@ class OrderAccordionItem(QWidget):
             self.t('act_edit'), self.t('act_pkg'), self.t('act_split'), 
             self.t('act_hold'), self.t('act_cancel')
         ]
-        for act in actions:
+        for key, act in zip(('edit','packages','split','hold','cancel'), actions):
             btn = QPushButton(act)
+            if key == "hold" and order_data.get("held"):
+                btn.setText(self.t("resume"))
+            if action:
+                btn.clicked.connect(lambda checked=False,k=key: action(k,order_data["raw_id"]))
             btn.setObjectName("action_btn")
             self.actions_layout.addWidget(btn)
 
@@ -94,14 +106,18 @@ class OrderAccordionItem(QWidget):
             qty = item['quantity']
             gross_price = item['unit_price']
             unit_weight = item['weight']
-            net_price = gross_price / 1.23
+            snapshot = json.loads(item["sale_snapshot"] or "{}")
+            sku = snapshot.get("sku",sku)
+            name = snapshot.get("name_"+translator_obj.lang_code,item["name_"+translator_obj.lang_code])
+            unit_weight = snapshot.get("weight",unit_weight) or 0
+            net_text = f"{snapshot['net_cents']/100:.2f} PLN" if snapshot else "-"
             total_gross = gross_price * qty
             total_weight = unit_weight * qty
             
             self.products_table.setItem(row_idx, 0, QTableWidgetItem(sku))
             self.products_table.setItem(row_idx, 1, QTableWidgetItem(name))
-            self.products_table.setItem(row_idx, 2, QTableWidgetItem(f"{qty} pcs"))
-            self.products_table.setItem(row_idx, 3, QTableWidgetItem(f"{net_price:.2f} PLN"))
+            self.products_table.setItem(row_idx, 2, QTableWidgetItem(f"{qty} {self.t('units_short','pcs')}"))
+            self.products_table.setItem(row_idx, 3, QTableWidgetItem(net_text))
             self.products_table.setItem(row_idx, 4, QTableWidgetItem(f"{total_gross:.2f} PLN"))
             self.products_table.setItem(row_idx, 5, QTableWidgetItem(f"{total_weight:.2f} kg"))
 
@@ -123,6 +139,7 @@ class OrdersView(QWidget):
         self.t = self.translator.t
         self.controller = OrderController(db_path=db_path)
         
+        self.sales = SalesController(db_path)
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(20, 20, 20, 20)
 
@@ -142,15 +159,22 @@ class OrdersView(QWidget):
         
         for box in [self.search_id, self.search_addr]:
             box.setObjectName("order_search")
-            box.textChanged.connect(self.filter_orders_in_memory)
+            box.textChanged.connect(self.load_orders)
             self.toolbar_layout.addWidget(box)
             
+        extra = QHBoxLayout()
+        self.search_product = QLineEdit()
+        self.search_channel = QLineEdit()
+        for box,key in ((self.search_product,"product"),(self.search_channel,"channel")):
+            box.setPlaceholderText(self.t(key,key))
+            extra.addWidget(box)
+            box.textChanged.connect(self.load_orders)
         self.date_filter = QComboBox()
         self.date_filter.setItemDelegate(QStyledItemDelegate(self.date_filter))
         self.date_filter.setObjectName("order_date_filter")
         
         # Default empty option to prevent immediate filtering
-        self.date_filter.addItem("Filter by date...", "") 
+        self.date_filter.addItem(self.t("filter_date"), "")
         self.date_filter.addItem(self.t('ord_filter_last_7'), "last_7")
         self.date_filter.addItem(self.t('ord_filter_this_week'), "this_week")
         self.date_filter.addItem(self.t('ord_filter_last_30'), "last_30")
@@ -192,7 +216,12 @@ class OrdersView(QWidget):
         self.toolbar_layout.addWidget(QLabel(self.t('ord_limit_label')))
         self.toolbar_layout.addWidget(self.limit_filter)
 
+        btn_add.clicked.connect(lambda: self.order_action("edit",None))
+        btn_import.clicked.connect(self.import_orders)
         self.layout.addLayout(self.toolbar_layout)
+        self.layout.addLayout(extra)
+        self.empty = QLabel(self.t("no_orders"))
+        self.layout.addWidget(self.empty)
 
         # --- COLUMN HEADERS ---
         self.headers_frame = QFrame()
@@ -255,7 +284,9 @@ class OrdersView(QWidget):
         limit = self.limit_filter.currentData()
         date_filter = self.date_filter.currentData()
         
-        orders = self.controller.get_orders(limit=limit, date_filter=date_filter)
+        orders = self.controller.get_orders(limit=limit, date_filter=date_filter, identity=self.search_id.text(),
+            destination=self.search_addr.text(), product=self.search_product.text(), channel=self.search_channel.text(), detailed=True)
+        self.empty.setVisible(not orders)
         
         for order in orders:
             order_id = order['order_id']
@@ -264,22 +295,79 @@ class OrdersView(QWidget):
             total_amount = order['total_amount']
             first_name = order['first_name']
             last_name = order['last_name']
-            payment = order['payment']
+            payment = order['payment_en'] if self.translator.lang_code == 'en' else order['payment']
             box_type = order['package_code']
-            net_amount = total_amount / 1.23 
+            snapshot = json.loads(order["sales_snapshot"] or "{}")
+            shipping = order["delivery_cents"]/100 if order["delivery_cents"] is not None else order["final_shipping_cost"]
             
+            if order["sent_count"] and order["sent_count"] < order["parcel_count"]:
+                status_code = f"{self.t('partially_sent')} {order['sent_count']}/{order['parcel_count']}"
             formatted_data = {
                 'raw_id': order_id, 
                 'no': f"ORD-{order_id:05d}",
                 'date_in': order_date[:16], 
-                'date_out': order_date[:16] if status_code == 'SHIPPED' else "-", 
-                'status': status_code, 
-                'net': f"{net_amount:.2f}", 
+                'date_out': (order['dispatched_at'] or '-')[:16],
+                'held': order['held'], 'status': self.t('held') if order['held'] else status_code,
+                'net': f"{order['net_cents']/100:.2f}" if order["net_cents"] is not None else "-",
                 'gross': f"{total_amount:.2f}", 
                 'pay': payment or "-", 
-                'pkg': box_type or "-", 
-                'ship': "14.99" if status_code == 'SHIPPED' else "0.00", 
-                'name': f"{first_name} {last_name}"
+                'pkg': box_type or snapshot.get('package_type') or "-",
+                'ship': f"{shipping:.2f}" if shipping is not None else "-",
+                'name': snapshot.get("customer_name",f"{first_name or ''} {last_name or ''}")
             }
-            item = OrderAccordionItem(formatted_data, self.translator, self.controller)
+            item = OrderAccordionItem(formatted_data, self.translator, self.controller, action=self.order_action)
+            if snapshot:
+                values = [order["channel"],order["external_ref"],*snapshot["recipient"].values(),*snapshot.get("billing",{}).values()]
+                info = QLabel(" · ".join(str(v) for v in values if v))
+                info.setTextFormat(Qt.PlainText)
+                info.setWordWrap(True)
+                item.actions_layout.addWidget(info)
             self.scroll_layout.addWidget(item)
+
+    def order_action(self, action, order_id):
+        try:
+            if action == "edit":
+                if OrderDialog(self.translator,self.sales,order_id,self).exec() != QDialog.Accepted:
+                    return
+            elif action in ("packages","split"):
+                from views.orders.dispatch_view import DispatchDialog
+                DispatchDialog(self.translator,self.controller.db_path,order_id,self).exec()
+            else:
+                order,_ = self.sales.details(order_id)
+                if action == "cancel" and QMessageBox.question(self,self.t("act_cancel"),self.t("confirm_cancel")) != QMessageBox.Yes:
+                    return
+                self.sales.change_state(order_id,"resume" if action=="hold" and order["held"] else action)
+            self.load_orders()
+        except (sqlite3.Error, ValueError, OSError) as e:
+            QMessageBox.warning(self,self.t("sale_order"),self.t(str(e),str(e)))
+
+    def import_orders(self):
+        folder = SettingsController().get_config().get("paths",{}).get("imports_default","")
+        path,_ = QFileDialog.getOpenFileName(self,self.t("act_import"),folder,"CSV / JSON (*.csv *.json)")
+        if not path:
+            return
+        try:
+            groups = read_groups(path)
+            preview = "\n".join(f"{k[0]} · {k[1]} · {len(rows)}" for k,rows in groups.items())
+            if QMessageBox.question(self,self.t("act_import"),f"{self.t('orders_count')}: {len(groups)} · {self.t('lines_count')}: {sum(map(len,groups.values()))}\n{preview}") != QMessageBox.Yes:
+                return
+            choices = self.sales.choices()
+            report = []
+            for key,rows in groups.items():
+                choice = None
+                if not rows[0].get("Email"):
+                    labels = [self.t("new_customer")] + [f"{r['customer_id']} · {r['first_name']} {r['last_name']}" for r in choices["customers"]]
+                    selected,ok = QInputDialog.getItem(self,self.t("customer_id")," / ".join(key),labels,0,False)
+                    if ok:
+                        index = labels.index(selected)
+                        choice = choices["customers"][index-1]["customer_id"] if index else "new"
+                try:
+                    oid = import_group(self.sales,rows,choices,choice)
+                    result = f"{self.t('added')} ORD-{oid:05d}"
+                except (ValueError,sqlite3.Error) as e:
+                    result = self.t(str(e),self.t("rejected")+" · "+self.t(getattr(e,"field",None) or str(e),str(e)))
+                report.append(" / ".join(key)+" · "+result)
+            QMessageBox.information(self,self.t("act_import"),"\n".join(report))
+            self.load_orders()
+        except (ValueError,OSError,sqlite3.Error,csv.Error) as e:
+            QMessageBox.warning(self,self.t("act_import"),self.t(str(e),str(e)))

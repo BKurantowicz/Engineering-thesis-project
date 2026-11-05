@@ -6,6 +6,8 @@ import uuid
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractItemView, QDialog, QDialogButtonBox, QHeaderView, QLabel, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout
 
+from PySide6.QtWidgets import QCheckBox, QMessageBox
+from controllers.settings_controller import SettingsController
 from controllers.inventory_controller import WarehouseError
 from views.products.product_dialog import warehouse_message
 
@@ -81,6 +83,7 @@ class AllocationDialog(PickDialog):
         super().__init__(translator, "pick_generate", parent)
         self.controller, self.order_ids = controller, order_ids
         self.saved_list_id = None
+        self.settings=SettingsController()
         self.resize(1000, 600)
         hint = QLabel(self.t("pick_allocation_hint"))
         hint.setWordWrap(True)
@@ -109,11 +112,23 @@ class AllocationDialog(PickDialog):
         if self.saved_list_id is not None:
             return
         allocations = [dict(order_item_id=item_id, location_id=location_id, quantity=editor.value()) for item_id, location_id, editor in self.editors if editor.value()]
+        suppress=False
+        if allocations and not self.settings.get_config().get("system",{}).get("skip_pick_confirmation"):
+            prompt=QMessageBox(QMessageBox.Question,self.t("pick_generate"),self.t("confirm_generation"),QMessageBox.Yes|QMessageBox.No,self)
+            remember=QCheckBox(self.t("skip_prompt"))
+            prompt.setCheckBox(remember)
+            if prompt.exec()!=QMessageBox.Yes:
+                return
+            suppress=remember.isChecked()
         try:
             self.saved_list_id = self.controller.create_list(self.order_ids, allocations)
         except (WarehouseError, sqlite3.Error) as error:
             self.show_error(error)
             return
+        if suppress:
+            config=self.settings.get_config()
+            config.setdefault("system",{})["skip_pick_confirmation"]=True
+            self.settings.save_config(config)
         self.buttons.button(QDialogButtonBox.Ok).setEnabled(False)
         self.accept()
 

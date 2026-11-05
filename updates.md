@@ -9,6 +9,30 @@ versions. Commits and merges alone do not establish that a release occurred.
 
 ## Unreleased
 
+### 2026-11-03 — Review corrections for order snapshots, imports and dispatch
+
+- Preserve the original product and customer descriptions when an operator edits an existing sale. Match complete recipient names and compare marketplace identities with the same Unicode rules used by the import preview.
+- A keyboard scanner submitting Enter records one unit and clears the previous warning.
+- Normalize dispatch IDs before classifying conflicting tracking assignments. Recheck stored email outcomes and require acknowledgement for each uncertain message before retry.
+
+### 2026-11-03 — Demo orders with transaction VAT
+
+- Generate orders through the sales controller with sample item VAT of 23% and delivery VAT of 8%, including an unallocated order and a fully picked order for packing. Rebuilding mock data remains an explicit operation.
+
+### 2026-11-02 — Order entry through final dispatch (US-S2-01–18)
+
+- Add transactional order entry, VAT and delivery snapshots, CSV/JSON import,
+  combined filters and history-preserving controls for unallocated NEW orders.
+- Extend product identification with EAN-13, add pick worksheets and show open
+  lists for the current shift with saved allocation progress.
+- Pack fully picked orders into individually identified parcels. Export actual
+  contents and confirm tracking per dispatch with duplicate/conflict detection.
+- Issue one whole-order invoice on final dispatch. Render its immutable data to
+  PDF and record a separate email delivery result for each parcel.
+- Add per-user SMTP credential storage, folder/database pickers, runtime
+  language and fullscreen selection, optional prompt suppression and seller fields.
+- Exercise the two-parcel flow through a controlled local SMTP receiver.
+
 ### 2026-11-01 — Capacity-safe physical placements (US-8-02, #26)
 
 - Check current physical occupancy and both rack limits inside each stock write

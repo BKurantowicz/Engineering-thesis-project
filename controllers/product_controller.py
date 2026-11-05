@@ -10,7 +10,7 @@ from controllers.inventory_controller import InventoryController, WarehouseError
 class ProductController:
     TEXT_FIELDS = ("sku", "name_pl", "name_en", "desc_pl", "desc_en")
     MEASUREMENTS = ("weight", "length", "width", "height")
-    FIELDS = TEXT_FIELDS + ("price",) + MEASUREMENTS
+    FIELDS = TEXT_FIELDS + ("price",) + MEASUREMENTS + ("ean",)
 
     def __init__(self, db_path):
         self.db_path = db_path
@@ -40,6 +40,11 @@ class ProductController:
             values[field] = value.strip()
             if field in cls.TEXT_FIELDS[:3] and not values[field]:
                 raise WarehouseError("required", field=field)
+        ean = str(data.get("ean") or "").strip()
+        if ean and (len(ean) != 13 or not ean.isascii() or not ean.isdigit() or
+                    sum(int(n)*(3 if idx % 2 else 1) for idx,n in enumerate(ean)) % 10):
+            raise WarehouseError("invalid_ean", field="ean")
+        values["ean"] = ean or None
         values["price"] = cls.number(data.get("price"), "price")
         if values["price"].as_tuple().exponent < -2:
             raise WarehouseError("price_precision", field="price")
@@ -70,7 +75,14 @@ class ProductController:
                 previous = connection.execute("SELECT * FROM products WHERE product_id = ?", (product_id,)).fetchone()
                 if previous is None:
                     raise WarehouseError("product_not_found")
-            for row in connection.execute("SELECT product_id, sku FROM products"):
+            if previous is not None and "ean" not in data:
+                values["ean"] = previous["ean"]
+            identifiers = {values["sku"].casefold(), values["ean"]} - {None}
+            for row in connection.execute("SELECT product_id, sku, ean FROM products"):
+                if row["product_id"] != product_id and row["ean"] and row["ean"] in identifiers:
+                    raise WarehouseError("duplicate_ean", field="ean")
+                if row["product_id"] != product_id and values["ean"] == row["sku"].strip().casefold():
+                    raise WarehouseError("duplicate_ean", field="ean")
                 if row["product_id"] != product_id and row["sku"].strip().casefold() == values["sku"].casefold():
                     raise WarehouseError("duplicate_sku", field="sku")
             parameters = tuple(float(values[field]) if isinstance(values[field], Decimal) else values[field] for field in self.FIELDS)

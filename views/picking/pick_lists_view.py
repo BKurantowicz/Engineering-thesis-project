@@ -1,6 +1,13 @@
 """Saved pick-list execution and shortage history."""
 
 import sqlite3
+from datetime import datetime
+from html import escape
+from pathlib import Path
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import QCheckBox
+from controllers.settings_controller import SettingsController
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QPushButton, QSpinBox, QStyledItemDelegate, QTableWidgetItem, QVBoxLayout, QWidget
@@ -36,6 +43,12 @@ class PickListsView(QWidget):
             top.addWidget(button)
         top.addStretch()
         layout.addLayout(top)
+        self.today = QCheckBox(self.t("today_lists"))
+        layout.addWidget(self.today)
+        self.today.toggled.connect(lambda: self.reload_lists(self.lists.currentData()))
+        self.print_button = QPushButton(self.t("print_list"))
+        self.print_button.clicked.connect(self.print_list)
+        top.addWidget(self.print_button)
         self.lists = QComboBox()
         self.lists.setItemDelegate(QStyledItemDelegate(self.lists))
         self.lists.setAccessibleName(self.t("pick_saved_lists"))
@@ -76,7 +89,9 @@ class PickListsView(QWidget):
         self.lists.clear()
         try:
             for row in self.controller.get_lists():
-                self.lists.addItem(f"#{row['pick_list_id']} · {self.t('pick_status_' + row['status'], row['status'])} · {row['created_at']}", row["pick_list_id"])
+                if self.today.isChecked() and (not row["today"] or row["status"]=="CLOSED"):
+                    continue
+                self.lists.addItem(f"#{row['pick_list_id']} · {self.t('pick_status_' + row['status'], row['status'])} · {row['created_at']} · {row['done']}/{row['required']}", row["pick_list_id"])
         except sqlite3.Error as error:
             self.lists.blockSignals(False)
             self.current_list = None
@@ -95,7 +110,7 @@ class PickListsView(QWidget):
         self.message.hide()
         list_id = self.lists.currentData()
         if list_id is None:
-            self.message.setText(self.t("pick_empty"))
+            self.message.setText(self.t("shift_empty" if self.today.isChecked() else "pick_empty"))
             self.message.show()
             self.update_actions()
             return
@@ -115,6 +130,35 @@ class PickListsView(QWidget):
                     item.setData(Qt.UserRole, line)
                 self.table.setItem(row, column, item)
         self.update_actions()
+
+    def print_list(self):
+        if not self.current_list:
+            return
+        current = self.controller.get_list(self.current_list["pick_list_id"])
+        folder = SettingsController().get_config()["paths"].get("exports_pick_lists") or "Exports"
+        columns = ("tbl_sku","product","prod_location","pick_allocated","pick_picked","pick_line_state")
+        rows = []
+        for line in current["lines"]:
+            resolved = line["cancelled"] or line["order_status"] == "CANCELLED"
+            state = "resolved" if resolved else ("picked" if line["picked_quantity"]==line["quantity"] else "open")
+            cells = (line["sku"],line["name_"+self.translator.lang_code],line["location_code"],
+                     line["quantity"],line["picked_quantity"], self.t("pick_line_"+state))
+            rows.append("<tr>"+"".join("<td>"+escape(str(v))+"</td>" for v in cells)+"<td>□</td></tr>")
+        title = self.t("print_list")+" #"+str(current["pick_list_id"])
+        document = "<meta charset='utf-8'><h1>"+escape(title)+"</h1><p>"+datetime.now().isoformat(timespec="minutes")+"</p>"
+        if rows:
+            document += "<table border='1' cellpadding='6'><tr>"+"".join("<th>"+escape(self.t(k,k))+"</th>" for k in columns)+"<th>✓</th></tr>"+"".join(rows)+"</table>"
+        else:
+            document += "<p>"+escape(self.t("missing_allocations"))+"</p>"
+        path = Path(folder)/f"pick-{current['pick_list_id']}.html"
+        try:
+            path.parent.mkdir(parents=True,exist_ok=True)
+            path.write_text(document,encoding="utf8")
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.resolve()))):
+                raise OSError(str(path))
+        except OSError as exc:
+            self.message.setText(self.t("file_error")+" "+str(exc))
+            self.message.show()
 
     def selected_line(self):
         item = self.table.item(self.table.currentRow(), 0)

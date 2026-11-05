@@ -111,9 +111,9 @@ class OrdersViewTests(unittest.TestCase):
         self.assertEqual(len(records[0].keys()), 14)
         view = self.open_view()
         expected = [
-            ["ORD-00101", self.dates[0][:16], "-", "NEW", "100.00", "123.00", "-", "-", "0.00", "Alice First"],
-            ["ORD-00102", self.dates[1][:16], self.dates[1][:16], "SHIPPED", "200.00", "246.00", "Przelew", "INPOST_A", "14.99", "Bob Second"],
-            ["ORD-00103", self.dates[2][:16], "-", "IN_PROGRESS", "60.00", "73.80", "-", "-", "0.00", "Alice First"],
+            ["ORD-00101", self.dates[0][:16], "-", "NEW", "-", "123.00", "-", "-", "-", "Alice First"],
+            ["ORD-00102", self.dates[1][:16], "-", "SHIPPED", "-", "246.00", "Bank Transfer", "INPOST_A", "14.99", "Bob Second"],
+            ["ORD-00103", self.dates[2][:16], "-", "IN_PROGRESS", "-", "73.80", "-", "-", "-", "Alice First"],
         ]
         actual = [[row.summary_layout.itemAt(i).widget().text() for i in range(row.summary_layout.count())] for row in self.rows(view)]
         self.assertEqual(actual, expected)
