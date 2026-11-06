@@ -9,6 +9,16 @@ versions. Commits and merges alone do not establish that a release occurred.
 
 ## Unreleased
 
+### 2026-11-06 — Larger acceptance dataset and visual test corrections (PR #53)
+
+- Add an explicit large mock profile with 100 products, 50 customers, 300 orders,
+  valid EANs, VAT snapshots, and fulfillment scenarios. An optional local Gmail
+  inbox receives unique test aliases; generation never sends notifications.
+- Count today's shipped orders by final parcel dispatch time, preserve unknown
+  historical dates, and clarify the dashboard label.
+- Fit packing columns to their contents so SKU codes and labels remain readable.
+- Exclude the local User Stories folder; Visual Studio metadata remains ignored.
+
 ### 2026-11-03 — Review corrections for order snapshots, imports and dispatch
 
 - Preserve the original product and customer descriptions when an operator edits an existing sale. Match complete recipient names and compare marketplace identities with the same Unicode rules used by the import preview.

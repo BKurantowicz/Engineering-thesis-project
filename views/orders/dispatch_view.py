@@ -6,7 +6,7 @@ import uuid
 
 from PySide6.QtCore import QThread, QUrl, Qt, Signal
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFileDialog, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
     QLineEdit, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 from controllers.dispatch_controller import DispatchController
@@ -138,6 +138,8 @@ class DispatchDialog(QDialog):
         for r,item in enumerate(self.items):
             for c,val in enumerate((item["sku"],item["name_"+self.translator.lang_code],item["remaining"],self.draft.get(item["item_id"],0))):
                 self.lines.setItem(r,c,QTableWidgetItem(str(val)))
+        self.lines.resizeColumnsToContents()
+        self.lines.horizontalHeader().setSectionResizeMode(1,QHeaderView.Stretch)
         self.parcels=self.ctrl.parcels(self.fixed_order)
         self.parcel_table.setRowCount(len(self.parcels))
         for r,p in enumerate(self.parcels):
