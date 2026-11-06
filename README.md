@@ -328,6 +328,27 @@ only after generation succeeds. Existing targets are refused without the flag;
 active SQLite sidecars prevent replacement. Startup never seeds destructively.
 Choose `demo.db` in the configured database path and restart to view it.
 
+For a larger visual acceptance dataset (100 products with EANs, 50 customers,
+300 orders over the last 90 days and 23 physical racks):
+
+```text
+python seed_demo.py --database demo-large.db --profile large
+```
+
+Optionally add `--test-email your.name@gmail.com` to assign unique Gmail
+`+demo001` through `+demo050` aliases to one test inbox. The address is supplied
+locally and is never embedded in the generator. Without it, customers use
+non-deliverable `example.test` addresses. Generation never connects to SMTP;
+seeded dispatch notifications remain pending and are not marked as sent.
+Rates and company details are fictional demonstration inputs. The large profile
+includes held/cancelled orders, pending/partial/completed picking, two-parcel
+packing, partial dispatch and shipped orders with immutable invoice snapshots.
+Order creation dates span 90 days; warehouse operations and dispatch confirmations
+are performed at generation time. This is a scenario dataset, not reconstructed
+historical activity. The dashboard counts completed orders dispatched today by
+their final parcel timestamp, independently of their order creation date.
+The existing small profile remains the default for quick regression fixtures.
+
 Demo orders include saved line VAT (23%) and delivery VAT (8%). A new, unallocated order is available for editing. The fully picked example can proceed directly to packing and invoicing. These rates are sample inputs.
 
 The dataset includes five plausible products, three customers, three physical

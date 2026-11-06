@@ -11,6 +11,7 @@ env/
 .vs/
 .vscode/
 .idea/
+/User Stories/
 
 # Database files
 seed_db.py

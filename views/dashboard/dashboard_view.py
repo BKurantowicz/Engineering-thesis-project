@@ -245,7 +245,7 @@ class DashboardView(QWidget):
         set_packed = QBarSet(self.translator.t("status_packed", "Packed"))
         set_packed.append([0])
         
-        set_shipped = QBarSet(self.translator.t("status_shipped", "Shipped"))
+        set_shipped = QBarSet(self.translator.t("dashboard_shipped_today", "Shipped today"))
         set_shipped.append([0])
         
         series = QBarSeries()
