@@ -1,0 +1,38 @@
+{
+  "pl": {
+    "template_email": "Szablon e-maila",
+    "template_pick": "Szablon pick-listy",
+    "template_invoice": "Szablon faktury",
+    "templates_refresh": "Odśwież szablony",
+    "templates_unavailable": "niedostępny — wzorzec domyślny",
+    "templates_fallback_notice": "Nie znaleziono wybranego szablonu. Dokument użyje domyślnego wzorca Standard. Wskaż folder templates w projekcie lub własny folder i odśwież listę.",
+    "email_preview_only": "Podgląd wiadomości — nic nie zostało wysłane. Możesz zapisać HTML bez konfiguracji SMTP.",
+    "email_save_preview": "Zapisz podgląd HTML",
+    "email_preview_saved": "Zapisano podgląd HTML. Wiadomość nie została wysłana.",
+    "mail_smtp_setup": "Nadanie jest zapisane. Nie wysłano powiadomienia: brak lub niepełna konfiguracja SMTP. Uzupełnij serwer, port, nadawcę, zabezpieczenie oraz dane logowania w Ustawieniach → Dane firmy → Konto SMTP.",
+    "mail_smtp_auth": "Nadanie jest zapisane. Serwer SMTP odrzucił dane logowania. Sprawdź nazwę użytkownika i hasło w ustawieniach konta SMTP.",
+    "mail_smtp_recipient": "Serwer SMTP odrzucił adres odbiorcy. Sprawdź adres e-mail zapisany w zamówieniu.",
+    "mail_smtp_connection": "Nie udało się zakończyć połączenia z SMTP. Sprawdź sieć, adres serwera, port i tryb TLS. Przy niepewnym wyniku sprawdź skrzynkę przed ponowieniem.",
+    "mail_document_error": "Nadanie jest zapisane. Nie można zapisać faktury PDF do załączenia. Sprawdź folder faktur i uprawnienia, a następnie ponów powiadomienie.",
+    "mail_notification_error": "Nie udało się przygotować powiadomienia. Nadanie pozostaje zapisane. Sprawdź dane zamówienia i konfigurację, a następnie ponów próbę.",
+    "mail_template_fallback": "Wiadomość przygotowano przy użyciu domyślnego szablonu, ponieważ wybrany plik był niedostępny lub nieprawidłowy."
+  },
+  "en": {
+    "template_email": "Email template",
+    "template_pick": "Pick-list template",
+    "template_invoice": "Invoice template",
+    "templates_refresh": "Refresh templates",
+    "templates_unavailable": "unavailable — default fallback",
+    "templates_fallback_notice": "The selected template was not found. Documents will use the default Standard design. Choose the project's templates folder or your own folder and refresh the list.",
+    "email_preview_only": "Message preview — nothing has been sent. You can save HTML without configuring SMTP.",
+    "email_save_preview": "Save HTML preview",
+    "email_preview_saved": "HTML preview saved. No message was sent.",
+    "mail_smtp_setup": "Dispatch is saved. Notification was not sent: SMTP configuration is missing or incomplete. Set the host, port, sender, security and credentials in Settings → Company Data → SMTP account.",
+    "mail_smtp_auth": "Dispatch is saved. The SMTP server rejected the credentials. Check the username and password in SMTP account settings.",
+    "mail_smtp_recipient": "The SMTP server rejected the recipient. Check the email address stored on the order.",
+    "mail_smtp_connection": "The SMTP connection could not be completed. Check the network, host, port and TLS mode. For uncertain results, check the mailbox before retrying.",
+    "mail_document_error": "Dispatch is saved. The invoice PDF attachment could not be saved. Check the invoice folder and permissions, then retry the notification.",
+    "mail_notification_error": "The notification could not be prepared. Dispatch remains saved. Check the order data and settings before retrying.",
+    "mail_template_fallback": "The message used the default template because the selected file was unavailable or invalid."
+  }
+}

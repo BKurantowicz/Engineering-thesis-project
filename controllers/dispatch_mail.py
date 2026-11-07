@@ -6,41 +6,27 @@ import ssl
 import time
 from contextlib import closing
 from email.message import EmailMessage
-from html import escape
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from PySide6.QtGui import QTextDocument, QPdfWriter, QPageSize
+from PySide6.QtGui import QTextDocument, QPdfWriter, QPageSize, QFont
 
 from controllers.inventory_controller import connect
 
 
-def invoice_pdf(db_path, invoice_id, directory, translator):
+def invoice_pdf(db_path, invoice_id, directory, translator, config=None, on_warning=None):
     with closing(connect(db_path)) as db:
         row = db.execute("SELECT document FROM invoices WHERE invoice_id=?", (invoice_id,)).fetchone()
     if not row or not row[0]:
         raise ValueError("no_invoice")
     data = json.loads(row[0])
-    t = translator.t
-    def html(v):
-        return escape(str(v or ""))
-    def party(title, values):
-        return "<h3>"+html(title)+"</h3><p>"+"<br>".join(html(v) for v in values if v)+"</p>"
-    seller,recipient,billing = data["seller"],data["recipient"],data["billing"]
-    parts = ["<h1>"+html(t("invoice"))+" "+html(data["number"])+"</h1>",
-             f"<p>ORD-{data['order_id']:05d} · {html(data['date'])}</p>",
-             party(t("seller"),[seller.get(k) for k in ("name","street","postal_code","city","tax_id","bank","bdo")]),
-             party(t("billing"),[billing.get("billing_name") or (recipient["first_name"]+" "+recipient["last_name"]),
-                                  billing.get("billing_street") or recipient["street"],billing.get("billing_postal_code") or recipient["postal_code"],
-                                  billing.get("billing_city") or recipient["city"],billing.get("billing_country") or recipient["country"],billing.get("tax_id")])]
-    parts.append("<table border='1' cellpadding='5'><tr>"+"".join("<th>"+html(t(k,k))+"</th>" for k in
-                 ("product","quantity","price","vat_rate","net","vat","gross"))+"</tr>")
-    lines = [*data["lines"],dict(data["delivery"],name_en=t("delivery"),name_pl=t("delivery"))]
-    for line in lines:
-        values = (line["name_"+translator.lang_code],line["quantity"],line["unit"],line["vat"],
-                  *(f"{line[k]/100:.2f}" for k in ("net_cents","vat_cents","gross_cents")))
-        parts.append("<tr>"+"".join("<td>"+escape(str(v))+"</td>" for v in values)+"</tr>")
-    parts.append("</table><p>"+" · ".join(f"{html(t(k))} {sum(i[k+'_cents'] for i in lines)/100:.2f} PLN" for k in ("net","vat","gross"))+"</p>")
+    from utils.document_templates import invoice_html
+    if config is None:
+        from controllers.settings_controller import SettingsController
+        config = SettingsController().get_config()
+    document, warning = invoice_html(data, config, translator)
+    if warning and on_warning:
+        on_warning(warning)
     directory = Path(directory)
     directory.mkdir(exist_ok=True,parents=True)
     path = directory/(data["number"].replace("/","-")+".pdf")
@@ -51,7 +37,8 @@ def invoice_pdf(db_path, invoice_id, directory, translator):
         pdf.setPageSize(QPageSize(QPageSize.A4))
         pdf.setTitle(data["number"])
         doc = QTextDocument()
-        doc.setHtml("".join(parts))
+        doc.setDefaultFont(QFont("Segoe UI", 10))
+        doc.setHtml(document)
         doc.print_(pdf)
         del pdf
         if not temporary.read_bytes().startswith(b"%PDF-"):
@@ -80,6 +67,26 @@ class DispatchMail:
             row = db.execute("SELECT invoice_id FROM invoices WHERE order_id=? AND document IS NOT NULL",(order_id,)).fetchone()
             return row[0] if row else None
 
+    def preview(self, shipment_id, config, translator):
+        """Render the same HTML included in the SMTP message, without sending."""
+        from utils.document_templates import email_html
+        job = self.get(shipment_id)
+        if not job:
+            raise ValueError("not_ready")
+        message = json.loads(job["message"])
+        with closing(connect(self.db_path)) as db:
+            order = db.execute("""SELECT o.* FROM orders o JOIN order_shipments s USING(order_id)
+                                  WHERE s.shipment_id=?""", (shipment_id,)).fetchone()
+            header = json.loads(order["sales_snapshot"])
+            lines = [json.loads(row[0]) for row in db.execute(
+                "SELECT sale_snapshot FROM order_items WHERE order_id=? ORDER BY item_id", (order["order_id"],))]
+            invoice = db.execute("SELECT document FROM invoices WHERE invoice_id=?", (job["invoice_id"],)).fetchone()
+        document = json.loads(invoice[0]) if invoice else {}
+        context = dict(message, recipient=header["recipient"], lines=lines, delivery=header["delivery_line"],
+                       seller=document.get("seller", message.get("seller", config.get("company_info", {}))),
+                       invoice_number=document.get("number"), final=bool(job["invoice_id"]))
+        return email_html(context, config, translator)
+
     def send(self,shipment_id,config,translator,allow_uncertain=False):
         states = ("pending","failed","uncertain") if allow_uncertain else ("pending","failed")
         with closing(connect(self.db_path)) as db, db:
@@ -96,6 +103,7 @@ class DispatchMail:
             db.execute("UPDATE dispatch_mail SET state='sending',claimed_at=?,detail=NULL WHERE shipment_id=?",(int(time.time()),shipment_id))
         smtp=None
         submitted=False
+        warning=None
         try:
             settings=config.get("email_smtp",{})
             host=settings.get("host","").strip()
@@ -105,15 +113,37 @@ class DispatchMail:
                 raise ValueError("smtp_setup")
             if mode=="LOCAL" and host not in ("127.0.0.1","localhost","::1"):
                 raise ValueError("smtp_setup")
+            password = None
+            if mode != "LOCAL":
+                from utils.smtp_secret import load_password
+                try:
+                    password = load_password(settings["credential_id"]) if settings.get("credential_id") else os.environ.get("WMS_SMTP_PASSWORD")
+                except OSError:
+                    raise ValueError("smtp_setup") from None
+                if not settings.get("username") or not password:
+                    raise ValueError("smtp_setup")
+            try:
+                port=int(settings.get("port") or (465 if mode=="TLS" else 587))
+                if not 0 < port <= 65535:
+                    raise ValueError
+            except (ValueError, TypeError):
+                raise ValueError("smtp_setup") from None
             msg=EmailMessage()
             message=json.loads(job["message"])
             msg["Subject"]=translator.t("dispatch_subject")+" "+message["order"]
             msg["From"],msg["To"]=sender,job["recipient"]
             msg.set_content(mail_text(message,translator))
+            document, warning = self.preview(shipment_id, config, translator)
+            msg.add_alternative(document, subtype="html")
             if job["invoice_id"]:
-                path=invoice_pdf(self.db_path,job["invoice_id"],config["paths"].get("exports_invoices") or "Invoices",translator)
-                msg.add_attachment(path.read_bytes(),maintype="application",subtype="pdf",filename=path.name)
-            port=int(settings.get("port") or (465 if mode=="TLS" else 587))
+                try:
+                    notices = []
+                    path=invoice_pdf(self.db_path,job["invoice_id"],config["paths"].get("exports_invoices") or "Invoices",translator,config,notices.append)
+                    warning = warning or (notices[0] if notices else None)
+                    attachment=path.read_bytes()
+                except OSError:
+                    raise ValueError("document_error") from None
+                msg.add_attachment(attachment,maintype="application",subtype="pdf",filename=path.name)
             if mode=="TLS":
                 smtp=smtplib.SMTP_SSL(host,port,timeout=15,context=ssl.create_default_context())
             else:
@@ -121,17 +151,22 @@ class DispatchMail:
                 if mode=="STARTTLS":
                     smtp.starttls(context=ssl.create_default_context())
             if mode!="LOCAL":
-                from utils.smtp_secret import load_password
-                password=load_password(settings["credential_id"]) if settings.get("credential_id") else os.environ.get("WMS_SMTP_PASSWORD")
-                if not settings.get("username") or not password:
-                    raise ValueError("smtp_setup")
                 smtp.login(settings["username"],password)
             submitted=True
             smtp.send_message(msg)
-            state,detail="sent",None
+            state,detail="sent",("template_fallback" if warning else None)
         except (OSError,smtplib.SMTPException,ValueError,KeyError) as error:
             state = "uncertain" if submitted and not isinstance(error,(smtplib.SMTPResponseException,smtplib.SMTPRecipientsRefused)) else "failed"
-            detail=type(error).__name__
+            if isinstance(error, ValueError) and str(error) in ("smtp_setup", "document_error"):
+                detail = str(error)
+            elif isinstance(error, smtplib.SMTPAuthenticationError):
+                detail = "smtp_auth"
+            elif isinstance(error, smtplib.SMTPRecipientsRefused):
+                detail = "smtp_recipient"
+            elif isinstance(error, (OSError, smtplib.SMTPException)):
+                detail = "smtp_connection"
+            else:
+                detail = "notification_error"
         finally:
             if smtp:
                 smtp.close()

@@ -149,10 +149,51 @@ class SettingsView(QWidget):
         
         self.database_path,_ = self._add_path_row(grid,5,self.translator.t("database_file"),True)
         self.carrier_path,_ = self._add_path_row(grid,6,self.translator.t("carrier_folder"))
+        self.template_choices = {}
+        for row, kind in enumerate(("email", "pick", "invoice"), 7):
+            combo = QComboBox()
+            combo.setItemDelegate(QStyledItemDelegate(combo))
+            combo.setAccessibleName(self.translator.t("template_" + kind, kind))
+            self._add_form_row(grid, row, self.translator.t("template_" + kind, kind), combo)
+            self.template_choices[kind] = combo
+            combo.currentIndexChanged.connect(self.update_template_notice)
+        self.template_refresh = QPushButton(self.translator.t("templates_refresh", "Refresh templates"))
+        self.template_refresh.clicked.connect(lambda: self.refresh_templates())
+        grid.addWidget(self.template_refresh, 10, 2)
+        self.template_notice = QLabel()
+        self.template_notice.setWordWrap(True)
+        grid.addWidget(self.template_notice, 10, 0, 1, 2)
+        self.path_templates.textChanged.connect(lambda: self.refresh_templates())
         grid.setColumnStretch(1, 1)
         layout.addWidget(card)
         layout.addStretch()
         return page
+
+    def refresh_templates(self, saved=None):
+        from utils.document_templates import list_templates
+        selected = saved or {("pick_list" if kind == "pick" else kind): combo.currentData()
+                             for kind, combo in self.template_choices.items()}
+        config = {"paths": {"templates": {"base_dir": self.path_templates.text().strip()}}}
+        for kind, combo in self.template_choices.items():
+            key = "pick_list" if kind == "pick" else kind
+            choice = selected.get(key) or f"{kind}-standard.html"
+            names = list_templates(config, kind)
+            combo.clear()
+            for name in names:
+                combo.addItem(name, name)
+            if choice not in names:
+                combo.addItem(choice + " · " + self.translator.t("templates_unavailable", "default fallback"), choice)
+            combo.setCurrentIndex(combo.findData(choice))
+        self.update_template_notice()
+
+    def update_template_notice(self, *_):
+        if not hasattr(self, "template_notice"):
+            return
+        from utils.document_templates import list_templates
+        config = {"paths": {"templates": {"base_dir": self.path_templates.text().strip()}}}
+        unavailable = any(combo.currentData() not in list_templates(config, kind)
+                          for kind, combo in self.template_choices.items())
+        self.template_notice.setText(self.translator.t("templates_fallback_notice", "Unavailable templates use the bundled Standard design.") if unavailable else "")
 
     def _create_company_page(self):
         page = QWidget()
@@ -275,6 +316,9 @@ class SettingsView(QWidget):
         templates = paths.get("templates", {})
         if isinstance(templates, dict):
             self.path_templates.setText(templates.get("base_dir", ""))
+            self.refresh_templates(templates)
+        self._loaded_template_folder = self.path_templates.text()
+        self._loaded_template_choices = {kind: combo.currentData() for kind, combo in self.template_choices.items()}
         
         # Company details (mapped to 'company_info' instead of 'company')
         company = config.get("company_info", {})
@@ -350,9 +394,17 @@ class SettingsView(QWidget):
         config["paths"]["exports_invoices"] = self.path_export_inv.text()
         config["paths"]["imports_default"] = self.path_import.text()
         
-        if "templates" not in config["paths"]: config["paths"]["templates"] = {}
-        if isinstance(config["paths"]["templates"], dict):
-            config["paths"]["templates"]["base_dir"] = self.path_templates.text()
+        folder_changed = self.path_templates.text() != getattr(self, "_loaded_template_folder", "")
+        choices_changed = {kind: combo.currentData() for kind, combo in self.template_choices.items()
+                           if combo.currentData() != getattr(self, "_loaded_template_choices", {}).get(kind)}
+        if folder_changed or choices_changed:
+            templates = config["paths"].setdefault("templates", {})
+            if not isinstance(templates, dict):
+                templates = config["paths"]["templates"] = {}
+            if folder_changed:
+                templates["base_dir"] = self.path_templates.text()
+            for kind, choice in choices_changed.items():
+                templates["pick_list" if kind == "pick" else kind] = choice
         
         # Save company info
         if "company_info" not in config: config["company_info"] = {}
