@@ -7,7 +7,7 @@ import uuid
 from PySide6.QtCore import QThread, QUrl, Qt, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
-    QLineEdit, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
+    QLineEdit, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
 
 from controllers.dispatch_controller import DispatchController
 from controllers.dispatch_mail import DispatchMail, invoice_pdf, mail_text
@@ -91,6 +91,7 @@ class DispatchDialog(QDialog):
         self.message=QLabel()
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
+        self.parcel_table.itemSelectionChanged.connect(self.show_mail_status)
         self.orders.currentIndexChanged.connect(self.choose_order)
         self.choose_order()
         if confirm:
@@ -210,7 +211,9 @@ class DispatchDialog(QDialog):
         invoice=self.mail.invoice_for(oid)
         if invoice is None:
             raise ValueError("no_invoice")
-        path=invoice_pdf(self.db_path,invoice,self.config["paths"].get("exports_invoices") or "Invoices",self.translator)
+        warnings=[]
+        path=invoice_pdf(self.db_path,invoice,self.config["paths"].get("exports_invoices") or "Invoices",self.translator,self.config,warnings.append)
+        self.message.setText("\n".join(warnings))
         if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.resolve()))):
             raise OSError(str(path))
 
@@ -219,10 +222,36 @@ class DispatchDialog(QDialog):
         job=self.mail.get(selected[0]["shipment_id"]) if selected else None
         if not job:
             raise ValueError("not_ready")
-        text=mail_text(json.loads(job["message"]),self.translator)
-        if job["invoice_id"]:
-            text+="\nPDF · "+self.t("invoice")
-        QMessageBox.information(self,self.t("preview_mail"),text)
+        html,warning=self.mail.preview(selected[0]["shipment_id"],self.config,self.translator)
+        preview=QDialog(self)
+        preview.setWindowTitle(self.t("preview_mail"))
+        preview.resize(760,700)
+        layout=QVBoxLayout(preview)
+        note=QLabel(self.t("email_preview_only"))
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        if warning:
+            notice=QLabel(warning)
+            notice.setWordWrap(True)
+            layout.addWidget(notice)
+        browser=QTextBrowser()
+        browser.setOpenExternalLinks(False)
+        browser.setOpenLinks(False)
+        browser.setHtml(html)
+        layout.addWidget(browser)
+        export=QPushButton(self.t("email_save_preview"))
+        def save_preview():
+            from pathlib import Path
+            path,_=QFileDialog.getSaveFileName(preview,self.t("email_save_preview"),"email-preview.html","HTML (*.html)")
+            if path:
+                try:
+                    Path(path).write_text(html,encoding="utf8")
+                    note.setText(self.t("email_preview_saved"))
+                except OSError:
+                    note.setText(self.t("file_error"))
+        export.clicked.connect(save_preview)
+        layout.addWidget(export)
+        preview.exec()
 
     def retry(self):
         selected=self.selection()
@@ -241,8 +270,23 @@ class DispatchDialog(QDialog):
         self.worker.start()
 
     def mail_result(self,dispatch,state):
-        self.message.setText(f"{self.t('dispatch_id')} {dispatch} · {self.t(state,state)}")
         self.refresh()
+        job=self.mail.get(dispatch) or {}
+        detail=job.get("detail")
+        text=f"{self.t('dispatch_id')} {dispatch} · {self.t(state,state)}"
+        if detail:
+            text+="\n"+self.t("mail_"+detail,self.t("mail_notification_error"))
+        self.message.setText(text)
+
+    def show_mail_status(self):
+        selected=self.selection()
+        if selected:
+            parcel=selected[0]
+            detail=parcel.get("mail_detail")
+            if detail:
+                self.message.setText(self.t("mail_"+detail,self.t("mail_notification_error")))
+            else:
+                self.message.clear()
 
     def reject(self):
         if not self.worker or not self.worker.isRunning():

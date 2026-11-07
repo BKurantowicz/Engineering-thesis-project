@@ -135,21 +135,12 @@ class PickListsView(QWidget):
         if not self.current_list:
             return
         current = self.controller.get_list(self.current_list["pick_list_id"])
-        folder = SettingsController().get_config()["paths"].get("exports_pick_lists") or "Exports"
-        columns = ("tbl_sku","product","prod_location","pick_allocated","pick_picked","pick_line_state")
-        rows = []
-        for line in current["lines"]:
-            resolved = line["cancelled"] or line["order_status"] == "CANCELLED"
-            state = "resolved" if resolved else ("picked" if line["picked_quantity"]==line["quantity"] else "open")
-            cells = (line["sku"],line["name_"+self.translator.lang_code],line["location_code"],
-                     line["quantity"],line["picked_quantity"], self.t("pick_line_"+state))
-            rows.append("<tr>"+"".join("<td>"+escape(str(v))+"</td>" for v in cells)+"<td>□</td></tr>")
-        title = self.t("print_list")+" #"+str(current["pick_list_id"])
-        document = "<meta charset='utf-8'><h1>"+escape(title)+"</h1><p>"+datetime.now().isoformat(timespec="minutes")+"</p>"
-        if rows:
-            document += "<table border='1' cellpadding='6'><tr>"+"".join("<th>"+escape(self.t(k,k))+"</th>" for k in columns)+"<th>✓</th></tr>"+"".join(rows)+"</table>"
-        else:
-            document += "<p>"+escape(self.t("missing_allocations"))+"</p>"
+        from utils.document_templates import pick_html
+        config = SettingsController().get_config()
+        folder = config["paths"].get("exports_pick_lists") or "Exports"
+        document, warning = pick_html(current, config, self.translator)
+        self.message.setText(warning or "")
+        self.message.setVisible(bool(warning))
         path = Path(folder)/f"pick-{current['pick_list_id']}.html"
         try:
             path.parent.mkdir(parents=True,exist_ok=True)

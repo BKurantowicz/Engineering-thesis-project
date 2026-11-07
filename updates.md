@@ -9,7 +9,20 @@ versions. Commits and merges alone do not establish that a release occurred.
 
 ## Unreleased
 
-### 2026-11-06 — Larger acceptance dataset and visual test corrections (PR #53)
+### 2026-11-07 — Document templates, shipment feedback and UI readability
+
+Story: document redesign and black-box UI/UX QA (local user-story specification).
+
+- Add editable Standard/Compact email, pick-list and invoice templates, folder
+  scanning, per-document selection and safe fallback with visible warnings.
+- Render HTML notifications with an offline preview/export; retain plain text and
+  final invoice attachments. Explain SMTP failures separately from dispatch.
+- Improve invoice totals, pick completion marks and Polish characters.
+- Highlight full order rows with Ctrl/Shift and keyboard selection; improve light
+  theme interaction states and inactive selection contrast.
+- Add regression coverage for templates, settings, selection and missing SMTP.
+
+### 2026-11-06 — Larger acceptance dataset and visual test corrections
 
 - Add an explicit large mock profile with 100 products, 50 customers, 300 orders,
   valid EANs, VAT snapshots, and fulfillment scenarios. An optional local Gmail

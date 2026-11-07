@@ -105,6 +105,28 @@ invoices and imports. The database changes on restart. Language and fullscreen
 settings apply on save. Optional list-generation confirmations can be restored
 in System settings. Seller bank and BDO fields are optional.
 
+Shipment confirmation and notification delivery have separate outcomes. Missing
+SMTP settings leave the confirmed dispatch and invoice intact. The parcel view
+explains the failure; select the parcel and retry after correcting configuration.
+The mail preview does not contact SMTP and can save a UTF-8 HTML file.
+
+### Document templates
+
+The `templates/` directory contains Standard and Compact designs for email, pick
+worksheets and invoices. In **Settings > Paths**, choose a template folder and a
+file for each type, then save. **Refresh templates** rescans files added while the
+application is open. A blank folder uses the bundled directory. Files must be
+named `email-*.html`, `pick-*.html` or `invoice-*.html`; the invoice HTML is
+rendered to A4 PDF. Missing or invalid files produce a warning and use a safe
+built-in design.
+
+To customize a design, copy its bundled HTML and retain its `{{token}}`
+placeholders. Available tokens are `lang`, `title`, `reference`, `date`, `intro`,
+`parties`, `table_head`, `rows`, `summary`, `footer` and `tracking`. Required
+tokens depend on document type; start from its bundled counterpart. Business
+values are escaped, and scripts, external assets and event handlers are rejected.
+Email uses inline CSS; the invoice PDF supports Qt's HTML/CSS subset.
+
 ## Technology and Structure
 
 Python 3, PySide6 (including Qt Charts), standard-library SQLite/JSON, and
@@ -116,6 +138,7 @@ models/            SQLite initialization and additive warehouse migrations
 controllers/       Validation, transactions, capacity, catalogue, orders, picking
 views/             PySide6 screens and forms; persistence stays in controllers
 utils/             Shared themes, translation loader, English/Polish dictionaries
+templates/         Editable Standard and Compact document designs
 seed_demo.py       Explicit coherent development-data generation
 config.json        Application configuration and preferences
 tests/             Isolated database/configuration and offscreen UI regressions

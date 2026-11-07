@@ -119,8 +119,8 @@ class RuntimeThemeTests(unittest.TestCase):
                     self.assert_color(window.sidebar_frame.palette().color(QPalette.Window), palette["bg_sidebar"])
                     self.assert_color(window.btn_dashboard.palette().color(QPalette.ButtonText), palette["text_muted"])
                     for field in window.findChildren(QLineEdit):
-                        self.assert_color(field.palette().color(QPalette.Base), palette["input_bg"])
-                        self.assert_color(field.palette().color(QPalette.Text), palette["text_main"])
+                        self.assert_color(field.palette().color(QPalette.Base), palette["input_bg" if field.isEnabled() else "bg_card"])
+                        self.assert_color(field.palette().color(QPalette.Text), palette["text_main" if field.isEnabled() else "text_muted"])
                     for page in range(4):
                         window.view_settings.tab_group.button(page).click()
                         self.app.processEvents()
