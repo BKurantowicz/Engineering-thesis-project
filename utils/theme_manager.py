@@ -1,5 +1,23 @@
 """Shared colors and widget rules for runtime theme changes."""
 
+from PySide6.QtCore import QEvent, QObject
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import QAbstractItemView, QTableWidget
+
+
+class _TableSelectionStyle(QObject):
+    """Apply row selection to tables created after the application's theme."""
+
+    @staticmethod
+    def prepare(table):
+        table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        table.horizontalHeader().setStretchLastSection(True)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Polish and isinstance(watched, QTableWidget):
+            self.prepare(watched)
+        return False
+
 
 class ThemeManager:
     PALETTES = {
@@ -41,6 +59,25 @@ class ThemeManager:
         theme_name = theme_name if theme_name in ThemeManager.PALETTES else "dark"
         app.setProperty("theme_name", theme_name)
         app.setProperty("font_size_name", font_size_name)
+        if not hasattr(app, "_table_selection_style"):
+            app._table_selection_style = _TableSelectionStyle(app)
+            app.installEventFilter(app._table_selection_style)
+        for widget in app.allWidgets():
+            if isinstance(widget, QTableWidget):
+                app._table_selection_style.prepare(widget)
+        p = ThemeManager.get_palette(theme_name)
+        palette = QPalette(app.palette())
+        for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+            for role, color in ((QPalette.Window, p['bg_main']), (QPalette.WindowText, p['text_main']),
+                                (QPalette.Base, p['input_bg']), (QPalette.AlternateBase, p['bg_card']),
+                                (QPalette.Text, p['text_main']), (QPalette.Button, p['border']),
+                                (QPalette.ButtonText, p['text_main']), (QPalette.Highlight, p['primary']),
+                                (QPalette.HighlightedText, '#ffffff'), (QPalette.ToolTipBase, p['bg_card']),
+                                (QPalette.ToolTipText, p['text_main']), (QPalette.PlaceholderText, p['text_muted'])):
+                palette.setColor(group, role, QColor(color))
+        for role in (QPalette.Text, QPalette.WindowText, QPalette.ButtonText):
+            palette.setColor(QPalette.Disabled, role, QColor(p['text_muted']))
+        app.setPalette(palette)
         # Qt sends StyleChange to existing widgets; charts refresh their API colors.
         app.setStyleSheet(ThemeManager.get_stylesheet(theme_name, font_size_name))
 
@@ -57,8 +94,12 @@ class ThemeManager:
             QFrame#settings_card {{ background-color: {p['bg_card']}; border-radius: 10px; }}
             QFrame#headers_frame {{ background-color: {p['bg_card']}; border-radius: 4px; font-weight: bold; }}
             QFrame#details_panel {{ background-color: {p['bg_card']}; border-radius: 4px; }}
-            QFrame#accordion_row {{ background-color: {p['input_bg']}; border: none; border-bottom: 1px solid {p['border']}; border-radius: 0; }}
+            QFrame#accordion_row {{ background-color: {p['input_bg']}; border: 1px solid transparent; border-bottom: 1px solid {p['border']}; border-radius: 0; }}
             QFrame#accordion_row[expanded="true"] {{ background-color: {p['border']}; }}
+            QFrame#accordion_row:hover {{ background-color: {p['border']}; }}
+            QFrame#accordion_row:focus {{ border: 1px solid {p['border_focus']}; }}
+            QFrame#accordion_row[selected="true"] {{ background-color: {p['primary']}; }}
+            QFrame#accordion_row[selected="true"] QLabel {{ color: white; }}
             QFrame#accordion_row QLabel {{ padding: 5px; }}
             QLabel {{ color: {p['text_main']}; background: transparent; border: none; }}
             QLabel#title_label {{ font-size: 18px; font-weight: bold; }}
@@ -66,22 +107,29 @@ class ThemeManager:
             QLabel#error_label {{ color: {p['chart_new']}; }}
             QLabel#accent_label, QLabel#column_label {{ color: {p['accent']}; }}
             QLabel#accent_label {{ margin-top: 15px; }}
-            QLineEdit, QComboBox, QSpinBox {{ background-color: {p['input_bg']}; color: {p['text_main']}; border: 1px solid {p['border']}; border-radius: 5px; padding: 6px; }}
-            QLineEdit:focus, QComboBox:focus {{ border: 1px solid {p['border_focus']}; }}
+            QLineEdit, QComboBox, QAbstractSpinBox, QTextEdit, QPlainTextEdit {{ background-color: {p['input_bg']}; color: {p['text_main']}; border: 1px solid {p['border']}; border-radius: 5px; padding: 6px; selection-background-color: {p['primary']}; selection-color: white; }}
+            QLineEdit:hover, QComboBox:hover, QAbstractSpinBox:hover, QTextEdit:hover, QPlainTextEdit:hover {{ border-color: {p['text_muted']}; }}
+            QLineEdit:focus, QComboBox:focus, QAbstractSpinBox:focus, QTextEdit:focus, QPlainTextEdit:focus {{ border-color: {p['border_focus']}; }}
+            QLineEdit:disabled, QComboBox:disabled, QAbstractSpinBox:disabled, QTextEdit:disabled, QPlainTextEdit:disabled {{ background-color: {p['bg_card']}; color: {p['text_muted']}; }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{ background-color: {p['bg_card']}; color: {p['text_main']}; selection-background-color: {p['accent']}; selection-color: {p['bg_sidebar']}; border: 1px solid {p['border']}; outline: none; }}
             QComboBox QAbstractItemView::item {{ padding: 4px 6px; }}
             QComboBox QAbstractItemView::item:selected, QComboBox QAbstractItemView::item:hover {{ background-color: {p['accent']}; color: {p['bg_sidebar']}; }}
-            QTableWidget {{ background-color: {p['bg_card']}; color: {p['text_main']}; gridline-color: {p['border']}; border: none; selection-background-color: {p['accent']}; selection-color: {p['bg_sidebar']}; }}
+            QTableWidget {{ background-color: {p['bg_card']}; alternate-background-color: {p['input_bg']}; color: {p['text_main']}; gridline-color: {p['border']}; border: 1px solid transparent; outline: none; selection-background-color: {p['primary']}; selection-color: white; }}
+            QTableWidget:focus {{ border-color: {p['border_focus']}; }}
+            QTableWidget::item {{ border: none; }}
+            QTableWidget::item:hover:!selected {{ background-color: {p['border']}; color: {p['text_main']}; }}
+            QTableWidget::item:selected, QTableWidget::item:selected:active, QTableWidget::item:selected:!active {{ background-color: {p['primary']}; color: white; }}
             QHeaderView::section {{ background-color: {p['bg_main']}; color: {p['accent']}; font-weight: bold; padding: 5px; border: none; border-bottom: 2px solid {p['border']}; }}
             QTableCornerButton::section {{ background-color: {p['bg_main']}; border: none; }}
             QProgressBar#capacity_bar {{ background-color: {p['input_bg']}; border: 1px solid {p['border']}; border-radius: 4px; }}
             QProgressBar#capacity_bar::chunk {{ background-color: {p['accent']}; border-radius: 3px; }}
             QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
             QChartView#chart_view {{ background: transparent; border: 1px solid {p['border']}; border-radius: 10px; }}
-            QPushButton {{ background-color: {p['border']}; color: {p['text_main']}; border-radius: 5px; padding: 8px; border: none; }}
-            QPushButton:hover {{ background-color: {p['input_bg']}; }}
-            QPushButton:focus {{ border: 1px solid {p['border_focus']}; }}
+            QPushButton {{ background-color: {p['border']}; color: {p['text_main']}; border-radius: 5px; padding: 8px; border: 1px solid transparent; }}
+            QPushButton:hover {{ background-color: {p['input_bg']}; color: {p['text_main']}; border-color: {p['text_muted']}; }}
+            QPushButton:pressed, QPushButton:checked {{ background-color: {p['primary']}; color: white; }}
+            QPushButton:focus {{ border-color: {p['border_focus']}; }}
             QPushButton#primary_btn {{ background-color: {p['primary']}; color: white; font-weight: bold; }}
             QPushButton#primary_btn:hover {{ background-color: {p['primary_hover']}; }}
             QPushButton#danger_btn {{ background-color: {p['danger']}; color: white; font-weight: bold; }}
@@ -90,10 +138,24 @@ class ThemeManager:
             QPushButton#menu_btn:hover {{ background-color: {p['bg_main']}; color: {p['accent']}; }}
             QPushButton#submenu_btn {{ background: transparent; text-align: left; padding: 5px; color: {p['accent']}; border-radius: 0; font-size: 13px; }}
             QPushButton#submenu_btn:hover {{ color: {p['text_main']}; }}
-            QPushButton#tab_btn {{ background-color: {p['bg_main']}; color: {p['text_muted']}; border-radius: 15px; padding: 8px 20px; font-weight: bold; border: 1px solid {p['border']}; }}
-            QPushButton#tab_btn:checked {{ background-color: {p['primary']}; color: white; border: none; }}
-            QPushButton#tab_btn:hover:!checked {{ background-color: {p['border']}; }}
+            QPushButton#tab_btn {{ background-color: {p['bg_main']}; color: {p['text_main']}; border-radius: 15px; padding: 8px 20px; font-weight: bold; border: 1px solid {p['border']}; }}
+            QPushButton#tab_btn:checked {{ background-color: {p['primary']}; color: white; }}
+            QPushButton#tab_btn:hover:!checked {{ background-color: {p['border']}; color: {p['text_main']}; }}
+            QPushButton#tab_btn:pressed, QPushButton#tab_btn:hover:pressed:!checked {{ background-color: {p['primary_hover']}; color: white; }}
+            QPushButton#tab_btn:focus {{ border-color: {p['border_focus']}; }}
             QPushButton#action_btn {{ background: transparent; color: {p['accent']}; text-align: left; }}
             QPushButton#action_btn:hover {{ color: {p['text_main']}; }}
+            QPushButton#primary_btn:pressed {{ background-color: {p['primary_hover']}; color: white; }}
+            QPushButton#danger_btn:pressed {{ background-color: {p['danger_hover']}; color: white; }}
+            QPushButton#menu_btn:pressed, QPushButton#submenu_btn:pressed, QPushButton#action_btn:pressed {{ background-color: {p['primary']}; color: white; }}
+            QPushButton:disabled, QPushButton#primary_btn:disabled, QPushButton#danger_btn:disabled, QPushButton#menu_btn:disabled, QPushButton#submenu_btn:disabled, QPushButton#tab_btn:disabled, QPushButton#action_btn:disabled {{ background-color: {p['bg_card']}; color: {p['text_muted']}; border: 1px solid {p['border']}; }}
+            QTabWidget::pane {{ background-color: {p['bg_card']}; border: 1px solid {p['border']}; }}
+            QTabBar::tab {{ background-color: {p['input_bg']}; color: {p['text_main']}; padding: 9px 14px; border: 1px solid {p['border']}; }}
+            QTabBar::tab:hover:!selected {{ background-color: {p['border']}; color: {p['text_main']}; }}
+            QTabBar::tab:selected {{ background-color: {p['primary']}; color: white; }}
+            QTabBar::tab:focus {{ border-color: {p['border_focus']}; }}
+            QTabBar::tab:disabled {{ background-color: {p['bg_card']}; color: {p['text_muted']}; }}
+            QToolTip {{ background-color: {p['bg_card']}; color: {p['text_main']}; border: 1px solid {p['border']}; padding: 5px; }}
             QCheckBox {{ color: {p['text_main']}; background: transparent; }}
+            QCheckBox:disabled {{ color: {p['text_muted']}; }}
         """

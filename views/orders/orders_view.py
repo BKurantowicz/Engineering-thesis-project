@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QFrame, 
     QLabel, QScrollArea, QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QStyledItemDelegate
 )
-from PySide6.QtCore import Qt, QDate
+from PySide6.QtCore import Qt, QDate, Signal
 
 import csv
 import json
@@ -16,24 +16,59 @@ from utils.translations import translator
 from controllers.order_controller import OrderController
 
 class ClickableRow(QFrame):
+    selection_requested = Signal(object)
+    navigation_requested = Signal(int, object)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.is_expanded = False
         self.setProperty("expanded", False)
+        self.setProperty("selected", False)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.details_panel = None
 
     def set_details_panel(self, panel):
         self.details_panel = panel
 
-    def mousePressEvent(self, event):
+    def set_selected(self, selected):
+        if self.property("selected") == selected:
+            return
+        self.setProperty("selected", selected)
+        for widget in (self, *self.findChildren(QLabel)):
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+            widget.update()
+
+    def set_expanded(self, expanded):
         if self.details_panel:
-            self.is_expanded = not self.is_expanded
+            self.is_expanded = expanded
             self.details_panel.setVisible(self.is_expanded)
             self.setProperty("expanded", self.is_expanded)
             self.style().unpolish(self)
             self.style().polish(self)
             self.update()
-        super().mousePressEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.setFocus(Qt.MouseFocusReason)
+            self.selection_requested.emit(event.modifiers())
+            if not event.modifiers() & (Qt.ControlModifier | Qt.ShiftModifier):
+                self.set_expanded(not self.is_expanded)
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Left, Qt.Key_Right):
+            self.set_expanded(event.key() == Qt.Key_Right or
+                              (event.key() != Qt.Key_Left and not self.is_expanded))
+            event.accept()
+        elif event.key() in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Home, Qt.Key_End, Qt.Key_Space, Qt.Key_Escape) or (
+                event.key() == Qt.Key_A and event.modifiers() & Qt.ControlModifier):
+            self.navigation_requested.emit(event.key(), event.modifiers())
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
 
 class OrderAccordionItem(QWidget):
@@ -41,6 +76,7 @@ class OrderAccordionItem(QWidget):
         super().__init__(parent)
         self.t = translator_obj.t
         self.controller = controller
+        self.order_id = order_data['raw_id']
         
         # Store values for in-memory filtering
         self.order_id_str = order_data['no'].lower()
@@ -55,6 +91,11 @@ class OrderAccordionItem(QWidget):
         self.summary_row = ClickableRow()
         self.summary_row.setObjectName("accordion_row")
         self.summary_row.setCursor(Qt.PointingHandCursor)
+        self.summary_row.setAccessibleName(f"{order_data['no']} · {order_data['name']} · {order_data['status']}")
+        self.summary_row.setAccessibleDescription(
+            "Ctrl+klik: zaznacz wiele; strzałki: nawigacja; spacja: zaznacz; Enter: szczegóły"
+            if translator_obj.lang_code == "pl" else
+            "Ctrl+click: select multiple; arrows: navigate; Space: select; Enter: details")
         self.summary_layout = QHBoxLayout(self.summary_row)
         self.summary_layout.setContentsMargins(5, 5, 5, 5)
 
@@ -66,6 +107,7 @@ class OrderAccordionItem(QWidget):
 
         for text, stretch in columns:
             lbl = QLabel(str(text))
+            lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
             self.summary_layout.addWidget(lbl, stretch)
 
         # Expanded details panel
@@ -140,6 +182,9 @@ class OrdersView(QWidget):
         self.controller = OrderController(db_path=db_path)
         
         self.sales = SalesController(db_path)
+        self.selected_order_ids = set()
+        self.order_rows = []
+        self.selection_anchor = None
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(20, 20, 20, 20)
 
@@ -276,6 +321,7 @@ class OrdersView(QWidget):
 
     def load_orders(self):
         """Fetches data from DB and rebuilds the scroll area."""
+        self.order_rows = []
         while self.scroll_layout.count():
             child = self.scroll_layout.takeAt(0)
             if child.widget():
@@ -316,6 +362,10 @@ class OrdersView(QWidget):
                 'name': snapshot.get("customer_name",f"{first_name or ''} {last_name or ''}")
             }
             item = OrderAccordionItem(formatted_data, self.translator, self.controller, action=self.order_action)
+            self.order_rows.append(item)
+            item.summary_row.selection_requested.connect(lambda modifiers, row=item: self.select_order(row, modifiers))
+            item.summary_row.navigation_requested.connect(lambda key, modifiers, row=item: self.navigate_order(row, key, modifiers))
+            item.summary_row.set_selected(order_id in self.selected_order_ids)
             if snapshot:
                 values = [order["channel"],order["external_ref"],*snapshot["recipient"].values(),*snapshot.get("billing",{}).values()]
                 info = QLabel(" · ".join(str(v) for v in values if v))
@@ -323,6 +373,45 @@ class OrdersView(QWidget):
                 info.setWordWrap(True)
                 item.actions_layout.addWidget(info)
             self.scroll_layout.addWidget(item)
+        self.selected_order_ids.intersection_update(row.order_id for row in self.order_rows)
+        if self.selection_anchor not in {row.order_id for row in self.order_rows}:
+            self.selection_anchor = None
+
+    def paint_selection(self):
+        for row in self.order_rows:
+            row.summary_row.set_selected(row.order_id in self.selected_order_ids)
+
+    def select_order(self, row, modifiers=Qt.NoModifier):
+        ids = [item.order_id for item in self.order_rows]
+        if modifiers & Qt.ShiftModifier and self.selection_anchor in ids:
+            start, end = sorted((ids.index(self.selection_anchor), ids.index(row.order_id)))
+            selection = set(ids[start:end + 1])
+            self.selected_order_ids = self.selected_order_ids | selection if modifiers & Qt.ControlModifier else selection
+        else:
+            if modifiers & Qt.ControlModifier:
+                self.selected_order_ids.symmetric_difference_update({row.order_id})
+            else:
+                self.selected_order_ids = {row.order_id}
+            self.selection_anchor = row.order_id
+        self.paint_selection()
+
+    def navigate_order(self, row, key, modifiers):
+        if key == Qt.Key_Space:
+            self.select_order(row, modifiers)
+        elif key == Qt.Key_Escape:
+            self.selected_order_ids.clear()
+            self.paint_selection()
+        elif key == Qt.Key_A:
+            self.selected_order_ids = {item.order_id for item in self.order_rows}
+            self.paint_selection()
+        else:
+            index = self.order_rows.index(row)
+            index = 0 if key == Qt.Key_Home else len(self.order_rows) - 1 if key == Qt.Key_End else index + (1 if key == Qt.Key_Down else -1)
+            target = self.order_rows[max(0, min(index, len(self.order_rows) - 1))]
+            target.summary_row.setFocus(Qt.OtherFocusReason)
+            self.scroll_area.ensureWidgetVisible(target.summary_row)
+            if not modifiers & Qt.ControlModifier or modifiers & Qt.ShiftModifier:
+                self.select_order(target, modifiers)
 
     def order_action(self, action, order_id):
         try:

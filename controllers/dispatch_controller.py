@@ -73,7 +73,7 @@ class DispatchController:
     def parcels(self, order_id=None):
         with closing(connect(self.db_path)) as db:
             rows = db.execute("""SELECT s.*,p.actual_weight,c.carrier_name,o.status_code,o.sales_snapshot,o.delivery_name,
-                o.delivery_second_name,o.delivery_street,o.delivery_city,o.delivery_postal_code,m.state AS mail_state
+                o.delivery_second_name,o.delivery_street,o.delivery_city,o.delivery_postal_code,m.state AS mail_state,m.detail AS mail_detail
                 FROM order_shipments s JOIN packages p USING(package_id) JOIN orders o ON o.order_id=s.order_id
                 JOIN dict_shipping_methods c ON c.shipping_id=s.shipping_type_id LEFT JOIN dispatch_mail m USING(shipment_id)
                 WHERE (? IS NULL OR s.order_id=?) ORDER BY s.shipment_id""",(order_id,order_id))
@@ -193,7 +193,7 @@ class DispatchController:
                 db.execute("UPDATE orders SET status_code='SHIPPED' WHERE order_id=?",(row["order_id"],))
             email=header.get("recipient",{}).get("email")
             carrier=db.execute("SELECT carrier_name FROM dict_shipping_methods WHERE shipping_id=?",(row["shipping_type_id"],)).fetchone()[0]
-            message=dict(order=f"ORD-{row['order_id']:05d}",carrier=carrier,tracking=tracking,lang=lang)
+            message=dict(order=f"ORD-{row['order_id']:05d}",carrier=carrier,tracking=tracking,lang=lang,seller=company)
             db.execute("INSERT INTO dispatch_mail(shipment_id,recipient,message,invoice_id,state) VALUES(?,?,?,?,?)",
                        (row["shipment_id"],email,json.dumps(message),invoice_id,"pending" if email else "no_email"))
             return "accepted"

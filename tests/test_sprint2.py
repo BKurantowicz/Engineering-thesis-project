@@ -169,11 +169,37 @@ class SalesDispatchTests(unittest.TestCase):
             self.assertEqual(self.sql("SELECT count(*) FROM invoices"),[(idx,)])
             self.assertEqual(self.sql("SELECT status_code FROM orders"),[("SHIPPED" if idx else "PACKED",)])
         self.assertEqual(len(server.messages),2)
+        for delivered in server.messages:
+            self.assertIsNotNone(delivered.get_body(preferencelist=("plain",)))
+            rendered = delivered.get_body(preferencelist=("html",)).get_content()
+            self.assertIn("Łącznik", rendered)
+            self.assertIn("12.30", rendered)
+            self.assertIn("Łódź", rendered)
         self.assertEqual(len(list(server.messages[0].iter_attachments())),0)
         self.assertTrue(next(server.messages[1].iter_attachments()).get_payload(decode=True).startswith(b"%PDF-"))
         self.assertEqual(len(OrderController(self.path).get_orders()),1)
         invoice=self.mail.invoice_for(oid)
         self.assertTrue(invoice_pdf(self.path,invoice,self.root,self.lang).exists())
+
+    def test_missing_smtp_keeps_dispatch_and_explains_failure_without_connecting(self):
+        oid,item=self.picked()
+        shipment=self.ship.add_parcel(oid,"INPOST_A",1,{item:3})
+        self.ship.confirm((f"ORD-{oid}",str(shipment),"NO-SMTP"),{},"pl")
+        config={"paths":{},"email_smtp":{}}
+        html,warning=self.mail.preview(shipment,config,self.lang)
+        self.assertIn("NO-SMTP",html)
+        with patch("smtplib.SMTP") as smtp, patch("smtplib.SMTP_SSL") as secure:
+            self.assertEqual(self.mail.send(shipment,config,self.lang),"failed")
+        smtp.assert_not_called()
+        secure.assert_not_called()
+        self.assertEqual(self.mail.get(shipment)["detail"],"smtp_setup")
+        self.assertEqual(self.sql("SELECT status_code FROM orders"),[("SHIPPED",)])
+        self.assertEqual(self.sql("SELECT count(*) FROM invoices"),[(1,)])
+        dialog=DispatchDialog(self.lang,self.path,oid)
+        dialog.mail_result(shipment,"failed")
+        self.assertIn("SMTP",dialog.message.text())
+        self.assertIn("Nadanie",dialog.message.text())
+        dialog.close()
 
     def test_order_edit_keeps_original_product_snapshot(self):
         oid=self.sales.save(self.header,self.lines)

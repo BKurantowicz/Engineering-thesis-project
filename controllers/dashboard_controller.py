@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timedelta
 from controllers.capacity_controller import CapacityController
 
@@ -12,11 +13,11 @@ class DashboardController:
         return conn
 
     def get_order_status_counts(self):
-        """Fetches all active backlog, and SHIPPED orders strictly from the latest active date."""
+        """Fetch active backlog and orders whose final parcel was dispatched today."""
         counts = {"NEW": 0, "IN_PROGRESS": 0, "PACKED": 0, "SHIPPED": 0} 
         
         try:
-            with self._get_connection() as conn:
+            with closing(self._get_connection()) as conn:
                 cursor = conn.cursor()
                 
                 # 1. Fetch all pending/active orders
@@ -31,13 +32,18 @@ class DashboardController:
                     if status in counts:
                         counts[status] = row['count']
                 
-                # 2. Fetch SHIPPED orders ONLY from today
+                # Dispatch timestamps are stored in local time by DispatchController.
+                # Older records without parcel timestamps cannot establish a dispatch date.
                 cursor.execute("""
                     SELECT COUNT(order_id) as count 
-                    FROM orders 
-                    WHERE status_code = 'SHIPPED' 
-                    AND DATE(order_date) = CURRENT_DATE
-                """)
+                    FROM orders o
+                    WHERE status_code = 'SHIPPED'
+                    AND NOT EXISTS (SELECT 1 FROM order_shipments s
+                                    WHERE s.order_id=o.order_id AND s.package_id IS NOT NULL
+                                      AND s.dispatched_at IS NULL)
+                    AND DATE((SELECT MAX(s.dispatched_at) FROM order_shipments s
+                              WHERE s.order_id=o.order_id AND s.package_id IS NOT NULL)) = ?
+                """, (datetime.now().date().isoformat(),))
                 shipped_row = cursor.fetchone()
                 if shipped_row and shipped_row['count']:
                     counts['SHIPPED'] = shipped_row['count']

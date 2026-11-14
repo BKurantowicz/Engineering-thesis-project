@@ -52,7 +52,9 @@ class StartupTests(unittest.TestCase):
             for path in self.tracked_paths:
                 if path.startswith("tests/"):
                     continue
-                if path.endswith(".py") or (path.startswith("utils/translations_") and path.endswith(".json")):
+                if (path.endswith(".py")
+                        or (path.startswith("utils/translations_") and path.endswith(".json"))
+                        or (path.startswith("templates/") and path.endswith(".html"))):
                     destination = checkout / path
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(ROOT / path, destination)

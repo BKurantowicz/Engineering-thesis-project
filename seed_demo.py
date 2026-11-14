@@ -86,7 +86,11 @@ def build_demo(db_path):
     return {"open": open_id, "partial": partial_id, "closed": closed_id, "shortage": shortage_id}
 
 
-def seed_demo(db_path, replace_mock=False):
+def seed_demo(db_path, replace_mock=False, *, profile="small", test_email=None):
+    if profile not in ("small", "large"):
+        raise ValueError("Unknown demonstration profile")
+    if test_email and profile != "large":
+        raise ValueError("--test-email requires --profile large")
     target = Path(db_path).expanduser().resolve()
     if target.exists() and not replace_mock:
         raise FileExistsError("The database exists. Use --replace-mock only for a designated mock database.")
@@ -98,6 +102,9 @@ def seed_demo(db_path, replace_mock=False):
     temporary = Path(filename)
     try:
         result = build_demo(temporary)
+        if profile == "large":
+            from demo_large import extend_demo
+            result.update(extend_demo(temporary, test_email))
         gc.collect()
         os.replace(temporary, target)
         return result
@@ -111,9 +118,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", required=True, help="Explicit path to the development/demo database.")
     parser.add_argument("--replace-mock", action="store_true", help="Replace the designated existing mock database after the complete dataset validates.")
+    parser.add_argument("--profile", choices=("small", "large"), default="small", help="Large: 100 products, 50 customers, 300 orders over 90 days.")
+    parser.add_argument("--test-email", help="Optional Gmail inbox; unique +demoNNN aliases are generated locally. No messages are sent.")
     args = parser.parse_args()
     try:
-        result = seed_demo(args.database, args.replace_mock)
+        result = seed_demo(args.database, args.replace_mock, profile=args.profile, test_email=args.test_email)
     except (OSError, RuntimeError, ValueError, sqlite3.Error) as error:
         parser.exit(1, str(error) + "\n")
     print("Created coherent demonstration lists:", result)
