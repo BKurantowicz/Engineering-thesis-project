@@ -1,4 +1,5 @@
 """Customer master-data regressions against isolated databases and real forms."""
+from controllers.auth_controller import maintenance
 
 from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
@@ -40,6 +41,8 @@ class CustomerDetailsTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        from controllers.auth_controller import maintenance
+        self.enterContext(maintenance())
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
         previous_directory = Path.cwd()
@@ -188,6 +191,7 @@ class CustomerDetailsTests(unittest.TestCase):
     def test_competing_saves_cannot_create_case_variant_duplicates(self):
         barrier = Barrier(2)
 
+        @maintenance()
         def attempt(email):
             controller = CustomerController(str(self.db_path))
             barrier.wait(timeout=5)

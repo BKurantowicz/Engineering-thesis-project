@@ -80,9 +80,10 @@ class StartupTests(unittest.TestCase):
 
                 def finish_after_startup():
                     ready = any(
-                        type(widget).__name__ == "MainWindow" and widget.isVisible()
+                        type(widget).__name__ == "SessionHost" and widget.isVisible()
                         for widget in QApplication.topLevelWidgets()
                     )
+                    ready = ready and not any(type(w).__name__ == "MainWindow" for w in QApplication.allWidgets())
                     print("MAIN_WINDOW_READY" if ready else "MAIN_WINDOW_MISSING")
                     QApplication.exit(0 if ready else 1)
 

@@ -1,4 +1,5 @@
 """Transactional sale entry, monetary snapshots and order lifecycle."""
+from controllers.auth_controller import authorized, bind
 import json
 from contextlib import closing
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -35,6 +36,7 @@ def priced_line(quantity, unit, vat):
 class SalesController:
     def __init__(self, db_path):
         self.db_path = db_path
+        bind(self)
 
     def choices(self):
         with closing(connect(self.db_path)) as db:
@@ -46,6 +48,11 @@ class SalesController:
                 "types": "SELECT * FROM dict_package_types ORDER BY base_cost",
             }.items()}
 
+    def known_references(self):
+        with closing(connect(self.db_path)) as db:
+            return {(str(r[0] or "").strip().casefold(), str(r[1]).strip().casefold())
+                    for r in db.execute("SELECT channel, external_ref FROM orders WHERE external_ref IS NOT NULL")}
+
     @staticmethod
     def editable(db, order_id):
         row = db.execute("""SELECT * FROM orders WHERE order_id=? AND status_code='NEW'
@@ -54,6 +61,7 @@ class SalesController:
             raise ValueError("order_locked")
         return row
 
+    @authorized()
     def change_state(self, order_id, action):
         with closing(connect(self.db_path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
@@ -73,6 +81,7 @@ class SalesController:
             items = db.execute("SELECT * FROM order_items WHERE order_id=? ORDER BY item_id", (order_id,))
             return dict(row), [dict(i) for i in items]
 
+    @authorized()
     def save(self, header, lines, order_id=None, new_customer=None, importing=False):
         with closing(connect(self.db_path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
@@ -81,8 +90,10 @@ class SalesController:
                 previous_header = json.loads(self.editable(db, order_id)["sales_snapshot"] or "{}")
             channel = header.get("channel", "").strip()
             reference = header.get("external_ref", "").strip()
-            if not channel or importing and not reference:
-                raise ValueError("identity")
+            if not channel:
+                raise ValueError("channel")
+            if importing and not reference:
+                raise ValueError("external_ref")
             db.create_function("casefold", 1, lambda value: (value or "").strip().casefold())
             if reference and db.execute("""SELECT 1 FROM orders WHERE casefold(channel)=?
                     AND casefold(external_ref)=? AND order_id != ?""",

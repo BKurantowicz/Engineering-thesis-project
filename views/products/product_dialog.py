@@ -1,6 +1,7 @@
 """Catalogue and explicit stock-entry dialogs using controller validation."""
 
 import sqlite3
+from controllers.auth_controller import AuthError
 
 from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QSpinBox, QStyledItemDelegate, QVBoxLayout
 
@@ -63,6 +64,9 @@ class ProductDialog(QDialog):
             if field in self.fields:
                 self.fields[field].setFocus()
             return
+        except AuthError as error:
+            self.error_label.setText(self.translator.t(str(error)))
+            return
         except sqlite3.Error:
             self.error_label.setText(self.translator.t("wh_error_storage"))
             return
@@ -108,6 +112,9 @@ class StockDialog(QDialog):
             self.controller.inventory.add_stock(self.product_id, self.location.currentData(), self.quantity.value())
         except WarehouseError as error:
             self.error_label.setText(warehouse_message(self.translator, error))
+            return
+        except AuthError as error:
+            self.error_label.setText(self.translator.t(str(error)))
             return
         except sqlite3.Error:
             self.error_label.setText(self.translator.t("wh_error_storage"))

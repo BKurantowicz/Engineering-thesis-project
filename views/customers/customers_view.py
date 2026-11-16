@@ -1,6 +1,7 @@
 """Customer list providing reachable Add/Edit master-data forms."""
 
 import sqlite3
+from controllers.auth_controller import AuthError
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -76,9 +77,12 @@ class CustomersView(QWidget):
         return item.data(Qt.UserRole) if item else None
 
     def update_actions(self):
+        from controllers.auth_controller import can_admin
         customer_id = self.selected_customer_id()
         for button in (self.edit_button, self.active_button, self.delete_button):
             button.setEnabled(customer_id is not None)
+        self.delete_button.setEnabled(customer_id is not None and can_admin())
+        self.delete_button.setToolTip('' if can_admin() else self.t('auth_forbidden'))
         if customer_id is not None:
             active = bool(self.table.item(self.table.currentRow(), 0).data(Qt.UserRole + 1))
             self.active_button.setText(self.t("cust_deactivate" if active else "cust_reactivate"))
@@ -86,7 +90,7 @@ class CustomersView(QWidget):
     def show_action_error(self, error):
         self.load_customers()
         code = error.code if isinstance(error, CustomerValidationError) else "storage"
-        self.message.setText(self.t("cust_error_" + code))
+        self.message.setText(self.t(str(error)) if isinstance(error,AuthError) else self.t("cust_error_" + code))
         self.message.show()
 
     def toggle_active(self):
@@ -96,7 +100,7 @@ class CustomersView(QWidget):
         active = bool(self.table.item(self.table.currentRow(), 0).data(Qt.UserRole + 1))
         try:
             self.controller.set_active(customer_id, not active)
-        except (CustomerValidationError, sqlite3.Error) as error:
+        except (CustomerValidationError, AuthError, sqlite3.Error) as error:
             self.show_action_error(error)
             return
         self.load_customers(customer_id)
@@ -120,7 +124,7 @@ class CustomersView(QWidget):
             return
         try:
             self.controller.delete_customer(customer_id)
-        except (CustomerValidationError, sqlite3.Error) as error:
+        except (CustomerValidationError, AuthError, sqlite3.Error) as error:
             self.show_action_error(error)
             return
         self.load_customers()

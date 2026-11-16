@@ -32,6 +32,8 @@ class CapacityTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        from controllers.auth_controller import maintenance
+        self.enterContext(maintenance())
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
         self.addCleanup(gc.collect)
@@ -90,7 +92,7 @@ class CapacityTests(unittest.TestCase):
         DatabaseManager(legacy)
         DatabaseManager(legacy)
         with closing(sqlite3.connect(legacy)) as connection:
-            self.assertEqual(connection.execute("SELECT * FROM locations ORDER BY location_id").fetchall(), [(7, "A-01", 500, 1, 0), (8, " BrAkI ", 1, 1, 1)])
+            self.assertEqual(connection.execute("SELECT * FROM locations ORDER BY location_id").fetchall(), [(7, "A-01", 500, 1, 0, 0), (8, " BrAkI ", 1, 1, 1, 0)])
             self.assertEqual([row[1] for row in connection.execute("PRAGMA table_info(locations)")].count("is_virtual"), 1)
 
     def test_empty_valid_racks_are_zero_but_no_physical_racks_is_unavailable(self):

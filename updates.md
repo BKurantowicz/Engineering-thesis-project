@@ -9,6 +9,43 @@ versions. Commits and merges alone do not establish that a release occurred.
 
 ## Unreleased
 
+### 2026-11-15 - QA remediation and thesis warehouse workflows (US v7)
+
+Stories: US-QA-01..05, US-TH-01..09, US-TH-11..12. US-TH-10 remains withdrawn.
+
+- Add shared administrator/employee authentication, explicit first-admin setup,
+  account creation/reset, mandatory temporary-password replacement and logout.
+  Mask passwords and store salted hashes; enforce roles at business entry points.
+- Create/register compatible warehouse files and switch all operational context
+  without restarting. Preserve drafts when staying; require explicit discard on
+  logout/switch. Retain account identity and remember the selected warehouse.
+- Add physical rack creation and history-preserving archival after transactional
+  checks for stock/reservations; exclude archived racks from operational selectors.
+- Add reasoned free-stock withdrawals and atomic transfers with free stock first,
+  then newest-order reservations. Preserve confirmed-pick sources and invalidate
+  superseded outstanding instructions.
+- Add additive UTF-8 delivery CSV preview/confirmation, whole-file validation,
+  aggregate capacity checks and warehouse-scoped delivery-number idempotency.
+- Record authenticated operation history alongside stock transactions and expose
+  filters, linked transfers/imports and existing history without invented actors.
+- Localize settings confirmations in the newly selected language, order statuses,
+  Save/Cancel and import recovery. Show known duplicate references before commit.
+- Show recipient details beneath the order contents and a selectable full parcel
+  detail view. Clear unrelated shipment feedback, select saved parcels, open Packages
+  on the parcel list and distinguish newly rendered invoices from prior outcomes.
+- Identify invalid order price/quantity/VAT fields and clarify active picking demand
+  versus resolved/history rows. Explain dispatch prerequisites for email preview.
+- Close SQLite connections deterministically during startup/dashboard/order reads
+  so warehouse initialization and switching release Windows file handles.
+- Extend isolated acceptance tests and update existing assertions for localized
+  statuses, context-specific SMTP feedback, additive archival schema and login gate.
+
+### 2026-11-15 - Readable dashboard dates (US-QA-01)
+
+- Space chronological date labels according to the available plot width on resize.
+  Keep the first and last dates and every point in both plotted series.
+- Preserve the existing week/month/year data and shared PL/EN theme behavior.
+
 ### 2026-11-07 — Document templates, shipment feedback and UI readability
 
 Story: document redesign and black-box UI/UX QA (local user-story specification).

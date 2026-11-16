@@ -1,6 +1,7 @@
 """Saved pick-list execution and shortage history."""
 
 import sqlite3
+from controllers.auth_controller import AuthError
 from datetime import datetime
 from html import escape
 from pathlib import Path
@@ -81,7 +82,7 @@ class PickListsView(QWidget):
         self.reload_lists()
 
     def show_error(self, error):
-        self.message.setText(warehouse_message(self.translator, error) if isinstance(error, WarehouseError) else self.t("wh_error_storage"))
+        self.message.setText(warehouse_message(self.translator, error) if isinstance(error, WarehouseError) else self.t(str(error), self.t("wh_error_storage")))
         self.message.show()
 
     def reload_lists(self, selected_id=None):
@@ -116,11 +117,17 @@ class PickListsView(QWidget):
             return
         try:
             self.current_list = self.controller.get_list(list_id)
-        except (WarehouseError, sqlite3.Error) as error:
+        except (WarehouseError, AuthError, sqlite3.Error) as error:
             self.show_error(error)
             self.update_actions()
             return
         self.table.setRowCount(len(self.current_list["lines"]))
+        lines = self.current_list['lines']
+        self.message.setText(self.t('pick_progress_explained').format(
+            active=sum(i['reserved_quantity'] for i in lines),
+            picked=sum(i['picked_quantity'] - i['returned_quantity'] for i in lines),
+            history=sum(bool(i['cancelled'] or i['order_status']=='CANCELLED') for i in lines)))
+        self.message.show()
         for row, line in enumerate(self.current_list["lines"]):
             state = "cancelled" if line["order_status"] == "CANCELLED" else ("resolved" if line["cancelled"] else ("picked" if line["picked_quantity"] == line["quantity"] else "open"))
             values = (line["order_id"], line["sku"] + " — " + line["name_" + self.translator.lang_code], line["location_code"], line["quantity"], line["picked_quantity"], line["reserved_quantity"], line["returned_quantity"], self.t("pick_line_" + state))
@@ -171,7 +178,7 @@ class PickListsView(QWidget):
     def execute(self, operation, *args):
         try:
             operation(*args)
-        except (WarehouseError, sqlite3.Error) as error:
+        except (WarehouseError, AuthError, sqlite3.Error) as error:
             self.show_error(error)
             return
         self.reload_lists(self.lists.currentData())
@@ -191,7 +198,7 @@ class PickListsView(QWidget):
             if not accepted:
                 return
             allocation = AllocationDialog(self.translator, self.controller, order_ids, self)
-        except (WarehouseError, sqlite3.Error) as error:
+        except (WarehouseError, AuthError, sqlite3.Error) as error:
             self.show_error(error)
             return
         if allocation.exec() == QDialog.Accepted:
@@ -205,7 +212,7 @@ class PickListsView(QWidget):
             return
         try:
             dialog = ShortageDialog(self.translator, self.controller, self.shortages, line, self)
-        except (WarehouseError, sqlite3.Error) as error:
+        except (WarehouseError, AuthError, sqlite3.Error) as error:
             self.show_error(error)
             return
         if dialog.exec() == QDialog.Accepted:
@@ -213,7 +220,7 @@ class PickListsView(QWidget):
             self.reload_lists(line["pick_list_id"])
             self.inventory_changed.emit()
             numbers = lambda key: ", ".join(map(str, result[key])) or self.t("pick_none")
-            self.message.setText(self.t("pick_shortage_result").format(fulfilled=numbers("fulfilled"), cancelled=numbers("cancelled"), lists=numbers("affected_lists")))
+            self.message.setText(self.message.text() + '\n' + self.t("pick_shortage_result").format(fulfilled=numbers("fulfilled"), cancelled=numbers("cancelled"), lists=numbers("affected_lists")))
             self.message.show()
         dialog.deleteLater()
 
@@ -227,6 +234,7 @@ class PickListsView(QWidget):
         dialog.setWindowTitle(self.t("pick_missing_history"))
         dialog.resize(1000, 500)
         layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(self.t('history_count').format(count=len(records))))
         table = table_widget([self.t(key) for key in ("prod_sku", "pick_missing_quantity", "prod_location", "pick_list_id", "pick_operation", "pick_date")])
         table.setRowCount(len(records))
         for row, record in enumerate(records):

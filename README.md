@@ -22,12 +22,68 @@ application and its operational limits.
 - Generate lists with manually chosen racks, reserve stock, confirm cumulative
   picking progress, close handled lists, and reconcile physical shortages.
 - Inspect virtual missing-stock history and independent kg/m³ utilization.
+- Dashboard date labels adapt to the available chart width while retaining every
+  plotted value across week, month and year ranges.
 - Save company settings, appearance, localization, paths, and preferences.
 
 Operators can enter, import and maintain eligible orders, pack fully picked goods,
 export parcels, confirm tracking and retrieve the final invoice. Carrier label
 purchasing, merchandise returns, user assignment, operational backups, route
-optimization and rack administration remain outside these workflows.
+optimization remain outside these workflows.
+
+## Accounts and warehouse operations
+
+On first launch, explicitly create the first administrator, then sign in. The
+application exposes no operational window before authentication. Administrators
+create employee accounts and reset employee passwords in **Accounts**. Employees
+must replace their temporary password after creation or reset, before entering a
+warehouse. **Change password** changes the current user's credential. Passwords
+use salted PBKDF2-SHA256 hashes; resetting/changing credentials invalidates older
+sessions. Accounts live in the shared `accounts.db` (optional `paths.accounts`),
+independently of warehouse files. Existing warehouse `users` rows are retained as
+legacy history and are not login credentials.
+
+The sidebar dropdown switches registered warehouse files without restarting. It shows
+the filename and directory to distinguish duplicate filenames. Administrators can
+create an empty warehouse with the current schema/reference dictionaries or
+register a compatible existing database. Creation never overwrites a file and
+does not copy catalogue, customers, orders or stock. The most recently selected
+warehouse is remembered in the shared account store. Failed validation leaves the
+current warehouse selected. **Sign out** and warehouse switching offer explicit
+discard-and-continue or stay; staying keeps the current window and drafts intact.
+
+Employees can edit products, customers and orders, cancel eligible NEW orders,
+receive/withdraw/transfer stock and inspect history. Only administrators can
+delete products/customers, create/register warehouses and create/archive racks.
+Reference protection still applies to administrators. Business operation entry
+points recheck roles and session/warehouse context; stale controllers cannot write
+after logout or switching warehouses. Offline mock generation and legacy fixture
+tests use an explicit maintenance context, unavailable while an application
+session is installed.
+
+**Warehouse operations** provides four tabs:
+
+- **Stock movements:** receive stock, withdraw only free units with a reason, or
+  confirm a transfer between physical racks. Missing reserved goods must use the
+  existing pick-list shortage workflow. Transfers consume free units first, then
+  reservations of newest orders (order date descending, then order ID and stable
+  allocation ID). Stock and reservations move in one transaction, retaining
+  order/list links and confirmed-pick history. Old outstanding instructions become
+  resolved history; regenerated pick worksheets show the new locations.
+- **Racks:** create a unique physical location with positive kg/m³ limits, or
+  archive an empty rack with no outstanding reservations. Dependencies are shown
+  before confirmation and rechecked at commit. Archived racks retain history and
+  are excluded from new placements, allocations and physical capacity totals.
+- **Delivery CSV:** preview a UTF-8 semicolon file with `sku;quantity;rack`, then
+  confirm its additive receipt. **Save CSV example** exports the format. Every row
+  must reference existing catalogue/rack identifiers and a positive whole quantity;
+  aggregate capacity is checked. One invalid row rejects the entire file. A delivery
+  number is required and unique per warehouse, including retries with changed
+  contents. Preview/cancel does not change stock or history.
+- **Operation history:** filter by date, operation, SKU and rack; inspect time,
+  quantities, shared actor identity, details and linked transfer/import IDs. Old
+  inventory transactions remain visible with unavailable actor data. Failed writes
+  never become completed history entries.
 
 ## From order entry to delivery
 
@@ -101,7 +157,8 @@ configuration keeps its reference. WMS_SMTP_PASSWORD is an alternative for a
 configured account without a saved credential. LOCAL transport is limited to a
 loopback test receiver. A successful send means the SMTP server accepted the
 message. Directory pickers cover the database, pick worksheets, carrier CSVs,
-invoices and imports. The database changes on restart. Language and fullscreen
+invoices and imports. Use the sidebar warehouse dropdown for live database switching;
+the configured database path is the initial warehouse candidate. Language and fullscreen
 settings apply on save. Optional list-generation confirmations can be restored
 in System settings. Seller bank and BDO fields are optional.
 
@@ -161,15 +218,15 @@ records intact.
 
 ### Database Selection
 
-`config.json` selects the database through `paths.database`. Database
+`config.json` supplies the initial database through `paths.database`. Database
 initialization, Dashboard, Orders, Customers, Products, and Pick Lists use that
 same path, including reloads, details, and controller write operations. When the
 key is absent, the default is `warehouse.db`.
 
 Relative paths resolve from the process working directory; absolute paths are
-used as supplied. Set a different path in the existing configuration and restart
-the application to use it across screens. Changing the saved path does not switch
-an already open window or copy records between database files.
+used as supplied. Administrators register additional files through the sidebar;
+all users switch registered warehouses using its dropdown. Switching replaces
+views, controllers and filters together; it never copies business records.
 
 ## Browsing Existing Orders
 
@@ -349,7 +406,7 @@ python seed_demo.py --database demo.db --replace-mock
 The complete dataset is built in a temporary sibling file and replaces the target
 only after generation succeeds. Existing targets are refused without the flag;
 active SQLite sidecars prevent replacement. Startup never seeds destructively.
-Choose `demo.db` in the configured database path and restart to view it.
+Register `demo.db` as an administrator and select it in the warehouse dropdown.
 
 For a larger visual acceptance dataset (100 products with EANs, 50 customers,
 300 orders over the last 90 days and 23 physical racks):
@@ -453,10 +510,19 @@ application rather than its chronological history.
 Views use controllers for persistence and share the translator/theme manager.
 InventoryController is the common physical-write/capacity guard; picking and
 shortage controllers operate within SQLite write transactions. DatabaseManager
-initializes tables and calls the additive warehouse and sales schema initializers.
+initializes tables and calls the additive warehouse, sales and operations schema
+initializers. SessionHost owns authentication and replaces MainWindow on warehouse
+switching. AuthController stores shared accounts and registry state; WarehouseController
+uses the same capacity and inventory write routines as picking.
 
 ```mermaid
 classDiagram
+    SessionHost *-- MainWindow
+    SessionHost --> AuthController
+    SessionHost --> WarehouseRegistry
+    MainWindow *-- WarehouseView
+    WarehouseView --> WarehouseController
+    WarehouseController --> InventoryController
     MainWindow *-- DashboardView
     MainWindow *-- OrdersView
     MainWindow *-- ProductsView
@@ -486,9 +552,16 @@ classDiagram
 
 ## Database Schema
 
-The diagram reflects the initialized schema. PK/UK/FK mark primary, single-column
+The diagram summarizes the core warehouse schema. PK/UK/FK mark primary, single-column
 unique, and foreign keys; comments identify nullable non-key fields and units.
 Composite primary keys protect inventory pairs and list/order links.
+
+The additional `operation_history` table records event time/type, linked operation
+ID, product/location, signed quantity, shared actor ID/login, details and optional
+unique inventory transaction ID. `delivery_receipts` uniquely records each warehouse's
+delivery number and import operation ID. Shared `accounts`, `warehouses` and
+`app_state` tables live in the separate account database, not in this diagram.
+Shared actors deliberately do not reference the legacy per-warehouse `users` table.
 
 ```mermaid
 erDiagram
@@ -564,6 +637,7 @@ erDiagram
         float max_weight "kg"
         float max_volume "m3"
         int is_virtual
+        int is_archived
     }
     ORDER_ITEMS {
         string sale_snapshot "nullable"

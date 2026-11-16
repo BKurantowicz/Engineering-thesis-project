@@ -60,6 +60,8 @@ class SalesDispatchTests(unittest.TestCase):
         cls.lang=translator("pl",str(Path(__file__).resolve().parents[1]/"utils"))
 
     def setUp(self):
+        from controllers.auth_controller import maintenance
+        self.enterContext(maintenance())
         tmp=tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.addCleanup(gc.collect)
@@ -196,6 +198,10 @@ class SalesDispatchTests(unittest.TestCase):
         self.assertEqual(self.sql("SELECT status_code FROM orders"),[("SHIPPED",)])
         self.assertEqual(self.sql("SELECT count(*) FROM invoices"),[(1,)])
         dialog=DispatchDialog(self.lang,self.path,oid)
+        dialog.mail_result(shipment,"failed")
+        self.assertEqual(dialog.message.text(), '')
+        dialog.tabs.setCurrentIndex(1)
+        dialog.parcel_table.selectRow(0)
         dialog.mail_result(shipment,"failed")
         self.assertIn("SMTP",dialog.message.text())
         self.assertIn("Nadanie",dialog.message.text())

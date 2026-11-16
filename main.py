@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, 
     QVBoxLayout, QPushButton, QStackedWidget, QLabel, QFrame
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 # Import core modules
 from models.database import DatabaseManager
@@ -25,8 +25,15 @@ from utils.theme_manager import ThemeManager
 
 class MainWindow(QMainWindow):
     """Main application window acting as the router/container for all views."""
-    def __init__(self, config, translator):
+    preferences_changed = Signal(object)
+
+    def __init__(self, config, translator, auth=None):
         super().__init__()
+        from controllers.auth_controller import ensure_session
+        ensure_session()
+        self.auth = auth
+        if auth:
+            auth.require()
         self.config = config
         self.translator = translator 
         self.t = translator.t 
@@ -106,6 +113,11 @@ class MainWindow(QMainWindow):
         self.sidebar_layout.addWidget(self.btn_products)
         self.sidebar_layout.addWidget(self.btn_customers)
         self.sidebar_layout.addWidget(self.btn_settings)
+        if self.auth:
+            self.btn_warehouse = QPushButton(self.t('warehouse_operations'))
+            self.btn_warehouse.setObjectName('menu_btn')
+            self.btn_warehouse.clicked.connect(self.open_warehouse)
+            self.sidebar_layout.addWidget(self.btn_warehouse)
         self.sidebar_layout.addStretch()
         self.sidebar_layout.addWidget(self.btn_exit)
 
@@ -122,7 +134,7 @@ class MainWindow(QMainWindow):
         
         # Bind Settings view to index 3
         self.btn_settings.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))
-        self.btn_exit.clicked.connect(self.close)
+        self.btn_exit.clicked.connect(lambda: self.window().close())
 
         self.main_layout.addWidget(self.sidebar_frame)
 
@@ -161,17 +173,23 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.view_settings)  # Index 3
         self.stacked_widget.addWidget(self.view_customers)
         self.stacked_widget.addWidget(self.view_picklists)
+        if self.auth:
+            from views.warehouse_view import WarehouseView
+            self.view_warehouse = WarehouseView(self.translator,self.db_path,self.auth)
+            self.view_warehouse.changed.connect(self.refresh_warehouse_views)
+            self.stacked_widget.addWidget(self.view_warehouse)
 
         self.main_layout.addWidget(self.stacked_widget)
 
     def apply_preferences(self,config):
         self.config=config
         if config["appearance"].get("fullscreen"):
-            self.showFullScreen()
-        elif self.isFullScreen():
-            self.showNormal()
+            self.window().showFullScreen()
+        elif self.window().isFullScreen():
+            self.window().showNormal()
         language=config["localization"]["language"]
         if language==self.translator.lang_code:
+            self.preferences_changed.emit(config)
             return
         current=self.stacked_widget.currentIndex()
         submenu=not self.orders_submenu.isHidden()
@@ -217,6 +235,11 @@ class MainWindow(QMainWindow):
         self.view_picklists.today.setChecked(today)
         self.view_picklists.reload_lists(list_id)
         previous.deleteLater()
+        self.preferences_changed.emit(config)
+
+    def open_warehouse(self):
+        self.view_warehouse.guarded(self.view_warehouse.reload)
+        self.stacked_widget.setCurrentWidget(self.view_warehouse)
 
     def open_dispatch(self,confirm):
         from views.orders.dispatch_view import DispatchDialog
@@ -254,7 +277,8 @@ if __name__ == "__main__":
     lang_code = config.get("localization", {}).get("language", "pl")
     lang_translator = translator(lang_code, "utils")
     
-    window = MainWindow(config, lang_translator)
+    from views.session_host import SessionHost
+    window = SessionHost(config, lang_translator)
     
     theme_name = config.get("appearance", {}).get("theme", "dark")
     font_size = config.get("appearance", {}).get("font_size", "medium")

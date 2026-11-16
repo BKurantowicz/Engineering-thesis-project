@@ -1,4 +1,5 @@
 """Catalogue maintenance and saleable-quantity filtering."""
+from controllers.auth_controller import authorized, bind
 
 from contextlib import closing
 from decimal import Decimal, InvalidOperation
@@ -14,6 +15,7 @@ class ProductController:
 
     def __init__(self, db_path):
         self.db_path = db_path
+        bind(self)
         self.inventory = InventoryController(db_path)
 
     @staticmethod
@@ -66,6 +68,7 @@ class ProductController:
                 groups.setdefault(row["sku"].strip().casefold(), []).append(row["product_id"])
         return [ids for ids in groups.values() if len(ids) > 1]
 
+    @authorized()
     def save_product(self, data, product_id=None):
         values = self.validate(data)
         with closing(connect(self.db_path)) as connection, connection:
@@ -135,6 +138,7 @@ class ProductController:
             result.append(product)
         return result
 
+    @authorized()
     def set_active(self, product_id, active):
         if not isinstance(active, bool):
             raise WarehouseError("invalid_state")
@@ -142,6 +146,7 @@ class ProductController:
             if connection.execute("UPDATE products SET is_active = ? WHERE product_id = ?", (int(active), product_id)).rowcount != 1:
                 raise WarehouseError("product_not_found")
 
+    @authorized(True)
     def delete_product(self, product_id):
         with closing(connect(self.db_path)) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")

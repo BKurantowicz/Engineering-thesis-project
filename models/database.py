@@ -1,7 +1,9 @@
 from models.sales_schema import initialize_sales_schema
 import sqlite3
 import os
+from contextlib import closing
 from models.warehouse_schema import initialize_warehouse_schema
+from models.operations_schema import initialize_operations_schema
 
 class DatabaseManager:
     def __init__(self, db_path="warehouse.db"):
@@ -14,7 +16,7 @@ class DatabaseManager:
     def initialize_database(self):
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True) if os.path.dirname(self.db_path) else None
 
-        with self.get_connection() as conn:
+        with closing(self.get_connection()) as conn, conn:
             cursor = conn.cursor()
 
             # --- 1. DICTIONARIES ---
@@ -266,6 +268,7 @@ class DatabaseManager:
             # --- 5. INITIAL SEED DATA ---
             initialize_warehouse_schema(cursor)
             initialize_sales_schema(cursor)
+            initialize_operations_schema(cursor)
             cursor.execute("SELECT COUNT(*) FROM dict_order_statuses")
             if cursor.fetchone()[0] == 0:
                 statuses = [

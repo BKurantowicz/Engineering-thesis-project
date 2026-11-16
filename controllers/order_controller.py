@@ -1,4 +1,5 @@
 import sqlite3
+from controllers.auth_controller import authorized, bind
 from contextlib import closing
 from datetime import datetime, timedelta
 
@@ -10,6 +11,7 @@ class OrderValidationError(ValueError):
 class OrderController:
     def __init__(self, db_path="warehouse.db"):
         self.db_path = db_path
+        bind(self)
 
     def get_orders(self, limit=50, date_filter="", search_term="", sort_by="date_desc", *, identity="", destination="", product="", channel="", detailed=False):
         """
@@ -131,7 +133,7 @@ class OrderController:
             query += " LIMIT ?"
             params.append(limit)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn:
             # Enable sqlite3.Row to allow UI components to access data by column names
             conn.row_factory = sqlite3.Row
             conn.create_function("fold", 1, lambda s: (s or "").casefold())
@@ -147,12 +149,13 @@ class OrderController:
             JOIN products p ON oi.product_id = p.product_id
             WHERE oi.order_id = ?
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute(query, (order_id,))
             return cursor.fetchall()
 
+    @authorized()
     def add_order(self, customer_id, payment_method_id, created_by, total_amount, delivery_data):
         """
         Creates a new order including the full delivery address.

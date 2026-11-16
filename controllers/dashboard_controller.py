@@ -62,7 +62,7 @@ class DashboardController:
         today = datetime.now()
 
         try:
-            with self._get_connection() as conn:
+            with closing(self._get_connection()) as conn:
                 cursor = conn.cursor()
                 
                 if filter_type == "7_days" or filter_type == "this_month":

@@ -1,6 +1,7 @@
 """Searchable catalogue with explicit, capacity-checked inventory additions."""
 
 import sqlite3
+from controllers.auth_controller import AuthError
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QDialog, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox, QPushButton, QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
@@ -89,15 +90,18 @@ class ProductsView(QWidget):
         return item.data(Qt.UserRole) if item else None
 
     def update_actions(self):
+        from controllers.auth_controller import can_admin
         product_id = self.selected_id()
         for key in ("edit", "add_stock", "deactivate", "delete"):
             self.buttons[key].setEnabled(product_id is not None)
+        self.buttons['delete'].setEnabled(product_id is not None and can_admin())
+        self.buttons['delete'].setToolTip('' if can_admin() else self.t('auth_forbidden'))
         if product_id is not None:
             active = self.table.item(self.table.currentRow(), 0).data(Qt.UserRole + 1)
             self.buttons["deactivate"].setText(self.t("prod_deactivate" if active else "prod_reactivate"))
 
     def show_error(self, error):
-        self.message.setText(warehouse_message(self.translator, error) if isinstance(error, WarehouseError) else self.t("wh_error_storage"))
+        self.message.setText(warehouse_message(self.translator, error) if isinstance(error, WarehouseError) else self.t(str(error), self.t("wh_error_storage")))
         self.message.show()
 
     def load_products(self, selected_id=None):
@@ -107,7 +111,7 @@ class ProductsView(QWidget):
         try:
             products = self.controller.get_products(self.search_input.text(), self.location.currentData(), **{key: editor.text() for key, editor in self.bounds.items()})
             conflicts = self.controller.get_sku_conflicts()
-        except (WarehouseError, sqlite3.Error) as error:
+        except (WarehouseError, AuthError, sqlite3.Error) as error:
             self.show_error(error)
             self.update_actions()
             return
@@ -134,7 +138,7 @@ class ProductsView(QWidget):
     def open_editor(self, product_id=None):
         try:
             dialog = ProductDialog(self.translator, self.controller, product_id, self)
-        except (WarehouseError, sqlite3.Error) as error:
+        except (WarehouseError, AuthError, sqlite3.Error) as error:
             self.show_error(error)
             return
         if dialog.exec() == QDialog.Accepted:
@@ -148,7 +152,7 @@ class ProductsView(QWidget):
             return
         try:
             dialog = StockDialog(self.translator, self.controller, product_id, self)
-        except (WarehouseError, sqlite3.Error) as error:
+        except (WarehouseError, AuthError, sqlite3.Error) as error:
             self.show_error(error)
             return
         if dialog.exec() == QDialog.Accepted:
@@ -163,7 +167,7 @@ class ProductsView(QWidget):
         active = bool(self.table.item(self.table.currentRow(), 0).data(Qt.UserRole + 1))
         try:
             self.controller.set_active(product_id, not active)
-        except (WarehouseError, sqlite3.Error) as error:
+        except (WarehouseError, AuthError, sqlite3.Error) as error:
             self.show_error(error)
             return
         self.load_products(product_id)
@@ -185,7 +189,7 @@ class ProductsView(QWidget):
             return
         try:
             self.controller.delete_product(product_id)
-        except (WarehouseError, sqlite3.Error) as error:
+        except (WarehouseError, AuthError, sqlite3.Error) as error:
             self.show_error(error)
             return
         self.load_products()
