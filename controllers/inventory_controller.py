@@ -5,6 +5,8 @@ from decimal import Decimal
 import sqlite3
 
 from controllers.capacity_controller import CapacityController
+from controllers.auth_controller import authorized, bind
+from models.operations_schema import record_event
 
 
 class WarehouseError(ValueError):
@@ -23,6 +25,7 @@ def connect(db_path):
 class InventoryController:
     def __init__(self, db_path):
         self.db_path = db_path
+        bind(self)
         self.capacity = CapacityController(db_path)
 
     @staticmethod
@@ -33,7 +36,7 @@ class InventoryController:
 
     def get_locations(self):
         with closing(connect(self.db_path)) as connection:
-            return [dict(row) for row in connection.execute("SELECT * FROM locations ORDER BY location_code, location_id")
+            return [dict(row) for row in connection.execute("SELECT * FROM locations WHERE is_archived=0 ORDER BY location_code, location_id")
                     if not self.capacity.is_virtual(row)]
 
     def stock_snapshot(self, connection, product_id=None):
@@ -44,7 +47,7 @@ class InventoryController:
             LEFT JOIN (SELECT product_id, location_id, SUM(reserved_quantity) AS reserved
                        FROM pick_allocations GROUP BY product_id, location_id) r
               ON r.product_id = i.product_id AND r.location_id = i.location_id
-            WHERE (? IS NULL OR i.product_id = ?) ORDER BY l.location_code, i.product_id
+            WHERE l.is_archived=0 AND (? IS NULL OR i.product_id = ?) ORDER BY l.location_code, i.product_id
         """, (product_id, product_id)).fetchall()
         result = []
         for row in rows:
@@ -63,6 +66,9 @@ class InventoryController:
         return {"weight": values[0], "volume": values[1] * values[2] * values[3] / 1_000_000}
 
     def placement_limits(self, connection, product_id, location_id, quantity):
+        location = connection.execute('SELECT is_archived FROM locations WHERE location_id=?', (location_id,)).fetchone()
+        if location is None or location[0]:
+            raise WarehouseError('physical_location_required')
         product = connection.execute("SELECT * FROM products WHERE product_id = ?", (product_id,)).fetchone()
         if product is None:
             raise WarehouseError("product_not_found")
@@ -84,14 +90,18 @@ class InventoryController:
         return selected
 
     @staticmethod
-    def write_change(connection, product_id, location_id, quantity_change, transaction_type):
+    def write_change(connection, product_id, location_id, quantity_change, transaction_type, operation_id=None, details=''):
         connection.execute("""
             INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?)
             ON CONFLICT(product_id, location_id) DO UPDATE SET quantity = quantity + excluded.quantity
         """, (product_id, location_id, quantity_change))
-        connection.execute("INSERT INTO inventory_transactions (product_id, location_id, quantity_change, transaction_type) VALUES (?, ?, ?, ?)",
+        transaction = connection.execute("INSERT INTO inventory_transactions (product_id, location_id, quantity_change, transaction_type) VALUES (?, ?, ?, ?)",
                            (product_id, location_id, quantity_change, transaction_type))
+        kind, _, reference = transaction_type.partition(':')
+        record_event(connection, kind, product_id, location_id, quantity_change,
+                     operation_id or reference or None, details, transaction.lastrowid)
 
+    @authorized()
     def add_stock(self, product_id, location_id, quantity):
         self.positive_quantity(quantity)
         with closing(connect(self.db_path)) as connection, connection:

@@ -1,4 +1,5 @@
 """Catalogue, availability and capacity guards against isolated persistence."""
+from controllers.auth_controller import maintenance
 
 from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
@@ -35,6 +36,8 @@ class ProductInventoryTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        from controllers.auth_controller import maintenance
+        self.enterContext(maintenance())
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
         self.addCleanup(gc.collect)
@@ -92,6 +95,7 @@ class ProductInventoryTests(unittest.TestCase):
 
     def test_simultaneous_case_variant_sku_creation_and_legacy_collisions(self):
         barrier = Barrier(2)
+        @maintenance()
         def save(sku):
             barrier.wait()
             try:
@@ -135,6 +139,7 @@ class ProductInventoryTests(unittest.TestCase):
     def test_competing_placements_cannot_overfill_rack(self):
         self.inventory.add_stock(self.product_id, 1, 49)
         barrier = Barrier(2)
+        @maintenance()
         def place(_):
             barrier.wait()
             try:

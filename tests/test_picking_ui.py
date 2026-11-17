@@ -25,6 +25,8 @@ class PickingUiTests(unittest.TestCase):
         picking.PickListTests.setUpClass()
 
     def setUp(self):
+        from controllers.auth_controller import maintenance
+        self.enterContext(maintenance())
         self.case = picking.PickListTests()
         self.case.setUp()
         self.addCleanup(self.case.doCleanups)

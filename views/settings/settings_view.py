@@ -461,9 +461,11 @@ class SettingsView(QWidget):
             self.smtp_options = dict(config["email_smtp"])
             self.smtp_key.clear()
             self.restore_prompts.setChecked(False)
+            from utils.translations import translator
+            confirmation = translator(config["localization"]["language"], self.translator.directory)
             self.saved.emit(config)
             QMessageBox.information(
                 self, 
-                self.translator.t("settings_saved_title", "Settings Saved"),
-                self.translator.t("saved_now")
+                confirmation.t("settings_saved_title", "Settings Saved"),
+                confirmation.t("saved_now")
             )

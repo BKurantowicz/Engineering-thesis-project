@@ -13,6 +13,7 @@ from controllers.dispatch_controller import DispatchController
 from controllers.dispatch_mail import DispatchMail, invoice_pdf, mail_text
 from controllers.sales_controller import SalesController
 from controllers.settings_controller import SettingsController
+from controllers.auth_controller import AuthError
 
 
 class MailWorker(QThread):
@@ -26,6 +27,9 @@ class MailWorker(QThread):
         for shipment in self.ids:
             try:
                 state=self.mail.send(shipment,self.config,self.translator,shipment in self.uncertain)
+            except AuthError as error:
+                self.result.emit(shipment,str(error))
+                break
             except (OSError,ValueError,sqlite3.Error):
                 state="uncertain"
             self.result.emit(shipment,state)
@@ -83,6 +87,10 @@ class DispatchDialog(QDialog):
         self.parcel_table=self.table(("sale_order","dispatch_id","package_type","carrier","basket","tracking","state","mail_state"))
         self.parcel_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         shipping.addWidget(self.parcel_table)
+        self.parcel_details = QTextBrowser()
+        self.parcel_details.setMaximumHeight(140)
+        self.parcel_details.setAccessibleName(self.t("parcel_details"))
+        shipping.addWidget(self.parcel_details)
         bar=QHBoxLayout()
         for key,slot in (("export",self.export),("confirm_file",self.import_file),("invoice",self.open_invoice),
                          ("preview_mail",self.preview_mail),("retry_mail",self.retry)):
@@ -92,6 +100,7 @@ class DispatchDialog(QDialog):
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
         self.parcel_table.itemSelectionChanged.connect(self.show_mail_status)
+        self.tabs.currentChanged.connect(self.show_mail_status)
         self.orders.currentIndexChanged.connect(self.choose_order)
         self.choose_order()
         if confirm:
@@ -111,12 +120,14 @@ class DispatchDialog(QDialog):
         layout.addWidget(button)
 
     def guarded(self,slot):
+        self.message.clear()
         try:
             slot()
         except (ValueError,sqlite3.Error,OSError,csv.Error) as error:
             self.message.setText(self.t(str(error),str(error)))
 
     def choose_order(self):
+        self.message.clear()
         self.draft.clear()
         oid=self.orders.currentData()
         if oid is not None:
@@ -134,6 +145,9 @@ class DispatchDialog(QDialog):
         self.refresh()
 
     def refresh(self):
+        selected_ids = {p["shipment_id"] for p in self.selection()} if hasattr(self, "parcels") else set()
+        self.parcel_table.blockSignals(True)
+        self.parcel_table.clearSelection()
         self.items=self.ctrl.packing_lines(self.orders.currentData())
         self.lines.setRowCount(len(self.items))
         for r,item in enumerate(self.items):
@@ -149,6 +163,14 @@ class DispatchDialog(QDialog):
                                     p["contents"],p["tracking_number"] or "—",self.t(state),self.t(p["mail_state"] or "", "—"))):
                 self.parcel_table.setItem(r,c,QTableWidgetItem(str(val)))
         self.parcel_table.resizeColumnsToContents()
+        self.parcel_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        self.parcel_table.blockSignals(False)
+        for row, parcel in enumerate(self.parcels):
+            if parcel["shipment_id"] in selected_ids:
+                from PySide6.QtCore import QItemSelectionModel
+                self.parcel_table.selectionModel().select(self.parcel_table.model().index(row, 0),
+                    QItemSelectionModel.Select | QItemSelectionModel.Rows)
+        self.show_mail_status()
 
     def scan_one(self):
         code=self.scan.text().strip().casefold()
@@ -168,8 +190,13 @@ class DispatchDialog(QDialog):
     def seal(self):
         shipment=self.ctrl.add_parcel(self.orders.currentData(),self.box.currentData(),self.carrier.currentData(),self.draft,self.token)
         self.clear_draft()
-        self.message.setText(f"{self.t('dispatch_id')}: {shipment}")
         self.tabs.setCurrentIndex(1)
+        for row, parcel in enumerate(self.parcels):
+            if parcel["shipment_id"] == shipment:
+                self.parcel_table.selectRow(row)
+                self.parcel_table.scrollToItem(self.parcel_table.item(row, 1))
+                break
+        self.message.setText(f"{self.t('dispatch_id')}: {shipment}")
 
     def selection(self):
         return [self.parcels[i.row()] for i in self.parcel_table.selectionModel().selectedRows()]
@@ -213,7 +240,7 @@ class DispatchDialog(QDialog):
             raise ValueError("no_invoice")
         warnings=[]
         path=invoice_pdf(self.db_path,invoice,self.config["paths"].get("exports_invoices") or "Invoices",self.translator,self.config,warnings.append)
-        self.message.setText("\n".join(warnings))
+        self.message.setText(self.t("invoice_render_now") + ("\n" + "\n".join(warnings) if warnings else ""))
         if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.resolve()))):
             raise OSError(str(path))
 
@@ -221,7 +248,7 @@ class DispatchDialog(QDialog):
         selected=self.selection()
         job=self.mail.get(selected[0]["shipment_id"]) if selected else None
         if not job:
-            raise ValueError("not_ready")
+            raise ValueError("preview_dispatch_first")
         html,warning=self.mail.preview(selected[0]["shipment_id"],self.config,self.translator)
         preview=QDialog(self)
         preview.setWindowTitle(self.t("preview_mail"))
@@ -271,6 +298,8 @@ class DispatchDialog(QDialog):
 
     def mail_result(self,dispatch,state):
         self.refresh()
+        if self.tabs.currentIndex() != 1 or dispatch not in {p["shipment_id"] for p in self.selection()}:
+            return
         job=self.mail.get(dispatch) or {}
         detail=job.get("detail")
         text=f"{self.t('dispatch_id')} {dispatch} · {self.t(state,state)}"
@@ -279,9 +308,14 @@ class DispatchDialog(QDialog):
         self.message.setText(text)
 
     def show_mail_status(self):
+        self.message.clear()
+        self.parcel_details.clear()
+        if self.tabs.currentIndex() != 1:
+            return
         selected=self.selection()
         if selected:
             parcel=selected[0]
+            self.parcel_details.setPlainText(f"ORD-{parcel['order_id']:05d} / {self.t('dispatch_id')} {parcel['shipment_id']}\n{parcel['contents']}")
             detail=parcel.get("mail_detail")
             if detail:
                 self.message.setText(self.t("mail_"+detail,self.t("mail_notification_error")))

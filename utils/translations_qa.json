@@ -1,0 +1,18 @@
+{
+  "en": {
+    "import_recovery": "Cannot import this file. Check the UTF-8 encoding, CSV/JSON format and required fields, then select the corrected file again.",
+    "parcel_details": "Selected parcel contents",
+    "preview_dispatch_first": "Confirm dispatch and tracking for this parcel first. Its shipment email preview will then be available.",
+    "invoice_render_now": "Invoice rendered again using the current template settings. The saved invoice number and business data are unchanged.",
+    "pick_status_PACKED": "Packed",
+    "pick_status_SHIPPED": "Shipped"
+  },
+  "pl": {
+    "import_recovery": "Nie można zaimportować pliku. Sprawdź kodowanie UTF-8, format CSV/JSON i wymagane pola, a następnie ponownie wybierz poprawiony plik.",
+    "parcel_details": "Zawartość wybranej paczki",
+    "preview_dispatch_first": "Najpierw potwierdź wysyłkę i numer śledzenia tej paczki. Wtedy będzie dostępny podgląd wiadomości o wysyłce.",
+    "invoice_render_now": "Fakturę wygenerowano ponownie według bieżących ustawień szablonu. Zapisany numer faktury i dane transakcji pozostają bez zmian.",
+    "pick_status_PACKED": "Spakowane",
+    "pick_status_SHIPPED": "Wysłane"
+  }
+}

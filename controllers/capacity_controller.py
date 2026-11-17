@@ -48,7 +48,8 @@ class CapacityController:
     def calculate(self, connection):
         """Also usable within a caller's inventory write transaction."""
         locations = connection.execute("SELECT * FROM locations ORDER BY location_code, location_id").fetchall()
-        physical = {row["location_id"]: row for row in locations if not self.is_virtual(row)}
+        physical = {row["location_id"]: row for row in locations
+                    if not self.is_virtual(row) and not dict(row).get('is_archived', 0)}
         known_ids = {row["location_id"] for row in locations}
         stock = {location_id: [] for location_id in physical}
         unclassified = False

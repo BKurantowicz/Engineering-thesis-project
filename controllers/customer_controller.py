@@ -1,4 +1,5 @@
 """Customer master-data access and validation, independent of historical orders."""
+from controllers.auth_controller import authorized, bind
 
 from contextlib import closing
 from email.errors import HeaderParseError
@@ -20,6 +21,7 @@ class CustomerController:
 
     def __init__(self, db_path="warehouse.db"):
         self.db_path = db_path
+        bind(self)
 
     def _connect(self):
         connection = sqlite3.connect(self.db_path)
@@ -54,6 +56,7 @@ class CustomerController:
     def _email_key(email):
         return (email or "").strip().casefold()
 
+    @authorized()
     def set_active(self, customer_id, active):
         if not isinstance(active, bool):
             raise CustomerValidationError("invalid_value", "is_active")
@@ -64,6 +67,7 @@ class CustomerController:
             if cursor.rowcount != 1:
                 raise CustomerValidationError("not_found")
 
+    @authorized(True)
     def delete_customer(self, customer_id):
         with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -83,6 +87,7 @@ class CustomerController:
                     groups.setdefault(key, []).append(row["customer_id"])
         return [ids for ids in groups.values() if len(ids) > 1]
 
+    @authorized()
     def save_customer(self, data, customer_id=None):
         values = self.validate(data)
         with closing(self._connect()) as connection, connection:

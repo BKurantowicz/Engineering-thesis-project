@@ -5,10 +5,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCharts import (
     QChart, QChartView, QSplineSeries,
     QBarSeries, QBarSet, QBarCategoryAxis, QValueAxis,
-    QAbstractBarSeries
+    QAbstractBarSeries, QCategoryAxis
 )
 from PySide6.QtCore import Qt, QMargins, QPointF, QEvent
-from PySide6.QtGui import QPainter, QColor, QFont, QPen
+from PySide6.QtGui import QPainter, QColor, QFont, QPen, QFontMetricsF
 from controllers.dashboard_controller import DashboardController
 from utils.theme_manager import ThemeManager
 
@@ -149,7 +149,11 @@ class DashboardView(QWidget):
         # Osie
         axis_font = QFont("Segoe UI", 9)
         
-        self.axis_x_trend = QBarCategoryAxis()
+        self.trend_dates = []
+        self._updating_date_labels = False
+        self.axis_x_trend = QCategoryAxis()
+        self.axis_x_trend.setLabelsPosition(QCategoryAxis.AxisLabelsPositionOnValue)
+        self.trend_chart.plotAreaChanged.connect(self.refresh_date_labels)
         self.axis_x_trend.setLabelsFont(axis_font)
         self.trend_chart.addAxis(self.axis_x_trend, Qt.AlignBottom)
         series_prev.attachAxis(self.axis_x_trend)
@@ -317,12 +321,10 @@ class DashboardView(QWidget):
             series_curr.replace(points_curr)
             series_prev.replace(points_prev)
             
-            self.axis_x_trend.clear()
-            self.axis_x_trend.append(formatted_dates)
-            
-            # Wymuszenie stałego pochylenia dla lepszej estetyki
-            self.axis_x_trend.setLabelsAngle(-45)
-            
+            self.trend_dates = formatted_dates
+            self.axis_x_trend.setRange(-0.5, len(formatted_dates) - 0.5)
+            self.refresh_date_labels()
+
             max_curr = max(trend_data['current']) if trend_data['current'] else 0
             max_prev = max(trend_data['previous']) if trend_data['previous'] else 0
             max_trend = max(max_curr, max_prev)
@@ -332,5 +334,33 @@ class DashboardView(QWidget):
         else:
             series_curr.replace([])
             series_prev.replace([])
-            self.axis_x_trend.clear()
-            self.axis_x_trend.append(["No Data"])
+            self.trend_dates = []
+            self.refresh_date_labels()
+
+    def refresh_date_labels(self, *args):
+        """Thin only axis labels; preserve every point and its original index."""
+        if self._updating_date_labels:
+            return
+        self._updating_date_labels = True
+        try:
+            axis = self.axis_x_trend
+            dates = self.trend_dates
+            metrics = QFontMetricsF(axis.labelsFont())
+            label_width = max((metrics.horizontalAdvance(d) for d in dates), default=0)
+            width = max(1, self.trend_chart.plotArea().width())
+            # Category labels need room on both sides of their anchor.
+            slots = max(2, int(width / (2 * (label_width + 16))))
+            count = len(dates)
+            indices = sorted({round(i * (count - 1) / (min(slots, count) - 1))
+                              for i in range(min(slots, count))}) if count > 1 else list(range(count))
+            labels = [dates[i] for i in indices]
+            if axis.categoriesLabels() == labels:
+                return
+            for label in axis.categoriesLabels():
+                axis.remove(label)
+            axis.setStartValue(-0.5)
+            for i in indices:
+                axis.append(dates[i], float(i))
+            axis.setLabelsAngle(0)
+        finally:
+            self._updating_date_labels = False

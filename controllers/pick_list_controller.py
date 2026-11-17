@@ -1,4 +1,5 @@
 """Persisted picking with explicit source allocations and cumulative confirmation."""
+from controllers.auth_controller import authorized, bind
 
 from contextlib import closing
 
@@ -8,6 +9,7 @@ from controllers.inventory_controller import InventoryController, WarehouseError
 class PickListController:
     def __init__(self, db_path):
         self.db_path = db_path
+        bind(self)
         self.inventory = InventoryController(db_path)
 
     @staticmethod
@@ -52,6 +54,7 @@ class PickListController:
                     items.append({**dict(row), "sources": [entry for entry in stock if entry["product_id"] == row["product_id"]]})
             return items
 
+    @authorized()
     def create_list(self, order_ids, allocations):
         if not order_ids or len(set(order_ids)) != len(order_ids):
             raise WarehouseError("select_orders")
@@ -123,6 +126,7 @@ class PickListController:
             """, (list_id,))]
             return {**dict(row), "lines": lines}
 
+    @authorized()
     def start_list(self, list_id):
         with closing(connect(self.db_path)) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -132,6 +136,7 @@ class PickListController:
             connection.execute("UPDATE pick_lists SET status = 'IN_PROGRESS' WHERE pick_list_id = ?", (list_id,))
             connection.execute("UPDATE orders SET status_code = 'IN_PROGRESS' WHERE status_code = 'NEW' AND order_id IN (SELECT order_id FROM pick_list_orders WHERE pick_list_id = ?)", (list_id,))
 
+    @authorized()
     def confirm_pick(self, allocation_id, picked_total):
         if isinstance(picked_total, bool) or not isinstance(picked_total, int) or picked_total < 0:
             raise WarehouseError("invalid_picked_total")
@@ -153,6 +158,7 @@ class PickListController:
             self.inventory.write_change(connection, row["product_id"], row["location_id"], -delta, "PICK")
             connection.execute("UPDATE pick_allocations SET picked_quantity = ?, reserved_quantity = reserved_quantity - ? WHERE allocation_id = ?", (picked_total, delta, allocation_id))
 
+    @authorized()
     def close_list(self, list_id):
         with closing(connect(self.db_path)) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")

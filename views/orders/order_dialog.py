@@ -22,6 +22,7 @@ class OrderDialog(QDialog):
         self.resize(770,610)
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
+        self.tabs = tabs
         layout.addWidget(tabs)
         self.fields = {}
         menus = {
@@ -73,12 +74,19 @@ class OrderDialog(QDialog):
         form.addWidget(remove)
         self.total = QLabel()
         self.error = QLabel()
+        self.error.setWordWrap(True)
         layout.addWidget(self.total)
         layout.addWidget(self.error)
         self.table.itemChanged.connect(self.recalculate)
         for key in ("delivery","delivery_vat"):
             self.fields[key].textChanged.connect(self.recalculate)
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Save).setText(self.t("prod_save"))
+        buttons.button(QDialogButtonBox.Cancel).setText(self.t("prod_cancel"))
+        for widget in self.fields.values():
+            signal = widget.currentIndexChanged if isinstance(widget, QComboBox) else widget.textChanged
+            signal.connect(self.error.clear)
+        self.table.itemChanged.connect(self.error.clear)
         buttons.accepted.connect(self.save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -151,6 +159,23 @@ class OrderDialog(QDialog):
             self.add_line(p,item["quantity"],item["unit_price"],saved.get("vat",""),item["item_id"])
 
     def save(self):
+        for row, line in enumerate(self.lines()):
+            try:
+                priced_line(line['quantity'], line['unit'], line['vat'])
+            except ValueError as error:
+                self.error.setText(f"{self.t('row_number')} {row + 1}: {self.t(str(error), str(error))}")
+                self.tabs.setCurrentIndex(3)
+                self.table.setCurrentCell(row, {'quantity': 1, 'price': 2, 'vat': 3}.get(str(error), 1))
+                self.table.setFocus()
+                return
+        try:
+            priced_line(1, self.fields['delivery'].text(), self.fields['delivery_vat'].text())
+        except ValueError as error:
+            field = 'delivery_vat' if str(error) == 'vat' else 'delivery'
+            self.error.setText(self.t('invalid_value') + ' / ' + self.t(field,field))
+            self.tabs.setCurrentIndex(0)
+            self.fields[field].setFocus()
+            return
         fields = {k:(w.currentData() if isinstance(w,QComboBox) else w.text().strip()) for k,w in self.fields.items()}
         fields["recipient"] = {k:fields.pop(k) for k in self.recipient_keys}
         fields["billing"] = {k:fields.pop(k) for k in self.billing_keys}

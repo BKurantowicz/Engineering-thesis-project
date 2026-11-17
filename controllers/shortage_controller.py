@@ -1,4 +1,5 @@
 """Atomic shortage reconciliation across every open list affected by a count."""
+from controllers.auth_controller import authorized, bind
 
 from collections import defaultdict
 from contextlib import closing
@@ -10,6 +11,7 @@ from controllers.inventory_controller import InventoryController, WarehouseError
 class ShortageController:
     def __init__(self, db_path):
         self.db_path = db_path
+        bind(self)
         self.inventory = InventoryController(db_path)
 
     def return_stock(self, connection, product_id, preferred_location, quantity, operation_id):
@@ -34,6 +36,7 @@ class ShortageController:
                 return returns
         raise WarehouseError("return_capacity")
 
+    @authorized()
     def reconcile(self, list_id, product_id, location_id, actual_quantity, operation_id, recorded_quantity=None):
         if isinstance(actual_quantity, bool) or not isinstance(actual_quantity, int) or actual_quantity < 0:
             raise WarehouseError("invalid_actual_quantity")

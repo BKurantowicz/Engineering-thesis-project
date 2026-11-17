@@ -1,4 +1,5 @@
 """Reservation, picking, and cross-list shortage transaction regressions."""
+from controllers.auth_controller import maintenance
 
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
@@ -16,6 +17,8 @@ class PickListTests(unittest.TestCase):
         products.ProductInventoryTests.setUpClass()
 
     def setUp(self):
+        from controllers.auth_controller import maintenance
+        self.enterContext(maintenance())
         self.case = products.ProductInventoryTests()
         self.case.setUp()
         self.addCleanup(self.case.doCleanups)
@@ -68,6 +71,7 @@ class PickListTests(unittest.TestCase):
         self.case.inventory.add_stock(self.product_id, 1, 5)
         orders = [self.order([(self.product_id, 5)]) for _ in range(2)]
         barrier = Barrier(2)
+        @maintenance()
         def generate(order_id):
             barrier.wait()
             try:

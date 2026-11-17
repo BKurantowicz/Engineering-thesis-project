@@ -86,6 +86,10 @@ def build_demo(db_path):
     return {"open": open_id, "partial": partial_id, "closed": closed_id, "shortage": shortage_id}
 
 
+from controllers.auth_controller import maintenance
+
+
+@maintenance()
 def seed_demo(db_path, replace_mock=False, *, profile="small", test_email=None):
     if profile not in ("small", "large"):
         raise ValueError("Unknown demonstration profile")

@@ -1,4 +1,5 @@
 """Pack already picked goods and reconcile carrier confirmations by dispatch ID."""
+from controllers.auth_controller import authorized, bind
 import csv
 import json
 import os
@@ -15,6 +16,7 @@ from controllers.pick_list_controller import PickListController
 class DispatchController:
     def __init__(self, db_path):
         self.db_path = db_path
+        bind(self)
 
     @staticmethod
     def eligible(db, order_id):
@@ -40,6 +42,7 @@ class DispatchController:
         with closing(connect(self.db_path)) as db:
             return self.items(db,order_id)
 
+    @authorized()
     def add_parcel(self, order_id, package_type, carrier_id, counts, token=None):
         with closing(connect(self.db_path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
@@ -85,6 +88,7 @@ class DispatchController:
                 results.append(dict(row,contents=", ".join(f"{sku} × {qty}" for sku,qty in contents)))
             return results
 
+    @authorized()
     def export(self, ids, folder):
         ready = [r for r in self.parcels() if r["shipment_id"] in ids and r["status_code"]=="PACKED" and not r["dispatched_at"]]
         if not ready or len(ready)!=len(set(ids)):
@@ -168,6 +172,7 @@ class DispatchController:
                 seen.add((d.lstrip("0") or "0",t))
         return result
 
+    @authorized()
     def confirm(self,record,company,lang):
         with closing(connect(self.db_path)) as db, db:
             db.execute("BEGIN IMMEDIATE")

@@ -40,6 +40,8 @@ class SelectionContrastTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        from controllers.auth_controller import maintenance
+        self.enterContext(maintenance())
         self.widgets = []
         self.addCleanup(self.app.setPalette, self.app.palette())
         self.addCleanup(self.app.setStyleSheet, self.app.styleSheet())

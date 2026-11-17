@@ -15,6 +15,8 @@ class CustomerSearchTests(unittest.TestCase):
         lifecycle.CustomerLifecycleTests.setUpClass()
 
     def setUp(self):
+        from controllers.auth_controller import maintenance
+        self.enterContext(maintenance())
         self.case = lifecycle.CustomerLifecycleTests()
         self.case.setUp()
         self.addCleanup(self.case.doCleanups)

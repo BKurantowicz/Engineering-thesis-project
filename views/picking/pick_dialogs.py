@@ -1,6 +1,7 @@
 """Explicit order selection, rack allocations, and physical shortage counts."""
 
 import sqlite3
+from controllers.auth_controller import AuthError
 import uuid
 
 from PySide6.QtCore import Qt
@@ -42,7 +43,7 @@ class PickDialog(QDialog):
         self.layout.addWidget(self.buttons)
 
     def show_error(self, error):
-        self.error_label.setText(warehouse_message(self.translator, error) if isinstance(error, WarehouseError) else self.t("wh_error_storage"))
+        self.error_label.setText(warehouse_message(self.translator, error) if isinstance(error, WarehouseError) else self.t(str(error), self.t("wh_error_storage")))
 
 
 class OrderSelectionDialog(PickDialog):
@@ -122,7 +123,7 @@ class AllocationDialog(PickDialog):
             suppress=remember.isChecked()
         try:
             self.saved_list_id = self.controller.create_list(self.order_ids, allocations)
-        except (WarehouseError, sqlite3.Error) as error:
+        except (WarehouseError, AuthError, sqlite3.Error) as error:
             self.show_error(error)
             return
         if suppress:
@@ -158,7 +159,7 @@ class ShortageDialog(PickDialog):
             return
         try:
             self.saved_result = self.shortages.reconcile(self.line["pick_list_id"], self.line["product_id"], self.line["location_id"], self.actual.value(), self.operation_id, self.recorded_quantity)
-        except (WarehouseError, sqlite3.Error) as error:
+        except (WarehouseError, AuthError, sqlite3.Error) as error:
             self.show_error(error)
             return
         self.buttons.button(QDialogButtonBox.Ok).setEnabled(False)

@@ -1,6 +1,7 @@
 """Translated customer Add/Edit form; the controller owns validation and writes."""
 
 import sqlite3
+from controllers.auth_controller import AuthError
 
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QVBoxLayout
 
@@ -60,6 +61,9 @@ class CustomerDialog(QDialog):
             ))
             if error.field in self.fields:
                 self.fields[error.field].setFocus()
+            return
+        except AuthError as error:
+            self.error_label.setText(self.t(str(error)))
             return
         except sqlite3.Error:
             self.error_label.setText(self.t("cust_error_storage"))

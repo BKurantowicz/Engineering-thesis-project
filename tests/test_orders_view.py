@@ -32,6 +32,8 @@ class OrdersViewTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        from controllers.auth_controller import maintenance
+        self.enterContext(maintenance())
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
         previous_directory = Path.cwd()
@@ -116,6 +118,8 @@ class OrdersViewTests(unittest.TestCase):
             ["ORD-00103", self.dates[2][:16], "-", "IN_PROGRESS", "-", "73.80", "-", "-", "-", "Alice First"],
         ]
         actual = [[row.summary_layout.itemAt(i).widget().text() for i in range(row.summary_layout.count())] for row in self.rows(view)]
+        for row in expected:
+            row[3] = view.t('pick_status_' + row[3], row[3])
         self.assertEqual(actual, expected)
 
     def test_empty_order_table_loads_and_reloads(self):

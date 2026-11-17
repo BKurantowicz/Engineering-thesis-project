@@ -113,7 +113,9 @@ class OrderAccordionItem(QWidget):
         # Expanded details panel
         self.details_panel = QFrame()
         self.details_panel.setObjectName("details_panel")
-        self.details_layout = QHBoxLayout(self.details_panel)
+        self.content_layout = QVBoxLayout(self.details_panel)
+        self.details_layout = QHBoxLayout()
+        self.content_layout.addLayout(self.details_layout)
         self.details_layout.setContentsMargins(15, 15, 15, 15)
 
         self.actions_layout = QVBoxLayout()
@@ -337,7 +339,7 @@ class OrdersView(QWidget):
         for order in orders:
             order_id = order['order_id']
             order_date = order['order_date']
-            status_code = order['status_code']
+            status_code = self.t('pick_status_' + order['status_code'], order['status_code'])
             total_amount = order['total_amount']
             first_name = order['first_name']
             last_name = order['last_name']
@@ -371,7 +373,8 @@ class OrdersView(QWidget):
                 info = QLabel(" · ".join(str(v) for v in values if v))
                 info.setTextFormat(Qt.PlainText)
                 info.setWordWrap(True)
-                item.actions_layout.addWidget(info)
+                info.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+                item.content_layout.addWidget(info)
             self.scroll_layout.addWidget(item)
         self.selected_order_ids.intersection_update(row.order_id for row in self.order_rows)
         if self.selection_anchor not in {row.order_id for row in self.order_rows}:
@@ -420,7 +423,7 @@ class OrdersView(QWidget):
                     return
             elif action in ("packages","split"):
                 from views.orders.dispatch_view import DispatchDialog
-                DispatchDialog(self.translator,self.controller.db_path,order_id,self).exec()
+                DispatchDialog(self.translator,self.controller.db_path,order_id,self,confirm=action=="packages").exec()
             else:
                 order,_ = self.sales.details(order_id)
                 if action == "cancel" and QMessageBox.question(self,self.t("act_cancel"),self.t("confirm_cancel")) != QMessageBox.Yes:
@@ -437,7 +440,10 @@ class OrdersView(QWidget):
             return
         try:
             groups = read_groups(path)
-            preview = "\n".join(f"{k[0]} · {k[1]} · {len(rows)}" for k,rows in groups.items())
+            known = self.sales.known_references()
+            preview = "\n".join(f"{k[0]} · {k[1]} · {len(rows)}" +
+                                (" · " + self.t("duplicate") if k in known else "")
+                                for k,rows in groups.items())
             if QMessageBox.question(self,self.t("act_import"),f"{self.t('orders_count')}: {len(groups)} · {self.t('lines_count')}: {sum(map(len,groups.values()))}\n{preview}") != QMessageBox.Yes:
                 return
             choices = self.sales.choices()
@@ -459,4 +465,4 @@ class OrdersView(QWidget):
             QMessageBox.information(self,self.t("act_import"),"\n".join(report))
             self.load_orders()
         except (ValueError,OSError,sqlite3.Error,csv.Error) as e:
-            QMessageBox.warning(self,self.t("act_import"),self.t(str(e),str(e)))
+            QMessageBox.warning(self,self.t("act_import"),self.t("import_recovery") + "\n" + self.t(str(e),str(e)))
