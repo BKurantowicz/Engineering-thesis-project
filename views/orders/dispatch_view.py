@@ -13,6 +13,7 @@ from controllers.dispatch_controller import DispatchController
 from controllers.dispatch_mail import DispatchMail, invoice_pdf, mail_text
 from controllers.sales_controller import SalesController
 from controllers.settings_controller import SettingsController
+from controllers.auth_controller import AuthError
 
 
 class MailWorker(QThread):
@@ -26,6 +27,9 @@ class MailWorker(QThread):
         for shipment in self.ids:
             try:
                 state=self.mail.send(shipment,self.config,self.translator,shipment in self.uncertain)
+            except AuthError as error:
+                self.result.emit(shipment,str(error))
+                break
             except (OSError,ValueError,sqlite3.Error):
                 state="uncertain"
             self.result.emit(shipment,state)
@@ -96,7 +100,7 @@ class DispatchDialog(QDialog):
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
         self.parcel_table.itemSelectionChanged.connect(self.show_mail_status)
-        self.tabs.currentChanged.connect(lambda: self.message.clear())
+        self.tabs.currentChanged.connect(self.show_mail_status)
         self.orders.currentIndexChanged.connect(self.choose_order)
         self.choose_order()
         if confirm:
@@ -306,6 +310,8 @@ class DispatchDialog(QDialog):
     def show_mail_status(self):
         self.message.clear()
         self.parcel_details.clear()
+        if self.tabs.currentIndex() != 1:
+            return
         selected=self.selection()
         if selected:
             parcel=selected[0]

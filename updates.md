@@ -9,6 +9,22 @@ versions. Commits and merges alone do not establish that a release occurred.
 
 ## Unreleased
 
+### 2026-11-17 - Review corrections for sessions, warehouses and dispatch feedback
+
+- R-01 / US-TH-02, US-TH-11: require an authenticated, password-ready session
+  and the originating warehouse context for shipment-mail operations. Recheck
+  background jobs before SMTP submission, release unsubmitted claims on revocation
+  and stop the remaining batch with the localized authorization reason.
+- R-02 / US-TH-03: validate all supported warehouse columns before registration
+  and activation, including carrier localization, package limits and mail payloads.
+  Preserve additive migration of pre-v7 history tables; reject incompatible files
+  without registering them or replacing the current operational window.
+- R-03 / US-QA-04: display stored parcel notification feedback only on Dispatch,
+  including refresh and worker completion; restore the selected parcel's status
+  when returning to that tab.
+- Add isolated regressions for the three findings, mid-send session revocation,
+  authenticated employee workers, failed live switching and pre-v7 compatibility.
+
 ### 2026-11-15 - QA remediation and thesis warehouse workflows (US v7)
 
 Stories: US-QA-01..05, US-TH-01..09, US-TH-11..12. US-TH-10 remains withdrawn.

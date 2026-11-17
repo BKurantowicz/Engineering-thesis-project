@@ -50,19 +50,23 @@ class AuthError(ValueError):
     pass
 
 
+def require_access(controller=None, admin=False):
+    """Recheck a bound operation, including checkpoints in background workers."""
+    ensure_session()
+    if runtime is not None:
+        runtime.require(admin)
+        if getattr(controller, '_session_epoch', runtime.epoch) != runtime.epoch:
+            raise AuthError('auth_required')
+        if runtime.warehouse and hasattr(controller, 'db_path') and str(Path(controller.db_path).resolve()) != runtime.warehouse:
+            raise AuthError('warehouse_context_changed')
+
+
 def authorized(admin=False):
     """Require a session at business entry points; offline fixtures opt in explicitly."""
     def decorate(method):
         @wraps(method)
         def call(*args, **kwargs):
-            ensure_session()
-            if runtime is not None:
-                runtime.require(admin)
-                instance = args[0] if args else None
-                if getattr(instance, '_session_epoch', runtime.epoch) != runtime.epoch:
-                    raise AuthError('auth_required')
-                if runtime.warehouse and hasattr(instance, 'db_path') and str(Path(instance.db_path).resolve()) != runtime.warehouse:
-                    raise AuthError('warehouse_context_changed')
+            require_access(args[0] if args else None, admin)
             return method(*args, **kwargs)
         return call
     return decorate

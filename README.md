@@ -47,7 +47,11 @@ The sidebar dropdown switches registered warehouse files without restarting. It 
 the filename and directory to distinguish duplicate filenames. Administrators can
 create an empty warehouse with the current schema/reference dictionaries or
 register a compatible existing database. Creation never overwrites a file and
-does not copy catalogue, customers, orders or stock. The most recently selected
+does not copy catalogue, customers, orders or stock. The warehouse schema is
+checked read-only for all required application columns before
+registration or activation, including carrier names, package dimensions and mail
+job fields. Pre-v7 warehouses remain supported through additive history migration.
+The most recently selected
 warehouse is remembered in the shared account store. Failed validation leaves the
 current warehouse selected. **Sign out** and warehouse switching offer explicit
 discard-and-continue or stay; staying keeps the current window and drafts intact.
@@ -60,6 +64,12 @@ points recheck roles and session/warehouse context; stale controllers cannot wri
 after logout or switching warehouses. Offline mock generation and legacy fixture
 tests use an explicit maintenance context, unavailable while an application
 session is installed.
+
+Shipment-mail workers bind to their initiating session and recheck authorization
+before claiming a job, opening SMTP and submitting the message. Logout, a required
+password change or a stale warehouse/session blocks a new send. Revocation before
+submission restores the unsubmitted job for a later authorized retry; an already
+submitted message retains its actual delivery outcome.
 
 **Warehouse operations** provides four tabs:
 

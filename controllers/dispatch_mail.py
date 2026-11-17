@@ -12,6 +12,7 @@ from tempfile import NamedTemporaryFile
 from PySide6.QtGui import QTextDocument, QPdfWriter, QPageSize, QFont
 
 from controllers.inventory_controller import connect
+from controllers.auth_controller import AuthError, authorized, bind, require_access
 
 
 def invoice_pdf(db_path, invoice_id, directory, translator, config=None, on_warning=None):
@@ -56,6 +57,7 @@ def mail_text(message, translator):
 class DispatchMail:
     def __init__(self, db_path):
         self.db_path = db_path
+        bind(self)
 
     def get(self,shipment_id):
         with closing(connect(self.db_path)) as db:
@@ -87,10 +89,12 @@ class DispatchMail:
                        invoice_number=document.get("number"), final=bool(job["invoice_id"]))
         return email_html(context, config, translator)
 
+    @authorized()
     def send(self,shipment_id,config,translator,allow_uncertain=False):
         states = ("pending","failed","uncertain") if allow_uncertain else ("pending","failed")
         with closing(connect(self.db_path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
+            require_access(self)
             job = db.execute("SELECT * FROM dispatch_mail WHERE shipment_id=?",(shipment_id,)).fetchone()
             if job and job["state"]=="sending":
                 if (job["claimed_at"] or 0) > time.time()-900:
@@ -100,7 +104,8 @@ class DispatchMail:
             if not job or job["state"] not in states:
                 return job["state"] if job else "no_email"
             # A process interrupted after claiming the job leaves an explicit uncertain result.
-            db.execute("UPDATE dispatch_mail SET state='sending',claimed_at=?,detail=NULL WHERE shipment_id=?",(int(time.time()),shipment_id))
+            claimed_at = int(time.time())
+            db.execute("UPDATE dispatch_mail SET state='sending',claimed_at=?,detail=NULL WHERE shipment_id=?",(claimed_at,shipment_id))
         smtp=None
         submitted=False
         warning=None
@@ -144,17 +149,28 @@ class DispatchMail:
                 except OSError:
                     raise ValueError("document_error") from None
                 msg.add_attachment(attachment,maintype="application",subtype="pdf",filename=path.name)
+            require_access(self)
             if mode=="TLS":
                 smtp=smtplib.SMTP_SSL(host,port,timeout=15,context=ssl.create_default_context())
             else:
                 smtp=smtplib.SMTP(host,port,timeout=15)
                 if mode=="STARTTLS":
                     smtp.starttls(context=ssl.create_default_context())
+            require_access(self)
             if mode!="LOCAL":
                 smtp.login(settings["username"],password)
+            require_access(self)
             submitted=True
             smtp.send_message(msg)
             state,detail="sent",("template_fallback" if warning else None)
+        except AuthError:
+            # Revocation before submission must not turn an unattempted delivery
+            # into a failed/uncertain send. Release only this worker's claim.
+            with closing(connect(self.db_path)) as db, db:
+                db.execute("""UPDATE dispatch_mail SET state=?,detail=?,claimed_at=?
+                    WHERE shipment_id=? AND state='sending' AND claimed_at=?""",
+                    (job['state'],job['detail'],job['claimed_at'],shipment_id,claimed_at))
+            raise
         except (OSError,smtplib.SMTPException,ValueError,KeyError) as error:
             state = "uncertain" if submitted and not isinstance(error,(smtplib.SMTPResponseException,smtplib.SMTPRecipientsRefused)) else "failed"
             if isinstance(error, ValueError) and str(error) in ("smtp_setup", "document_error"):
