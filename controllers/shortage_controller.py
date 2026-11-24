@@ -14,7 +14,7 @@ class ShortageController:
         bind(self)
         self.inventory = InventoryController(db_path)
 
-    def return_stock(self, connection, product_id, preferred_location, quantity, operation_id):
+    def return_stock(self, connection, product_id, preferred_location, quantity, operation_id, order_id=None):
         product = connection.execute("SELECT * FROM products WHERE product_id = ?", (product_id,)).fetchone()
         if product is None:
             raise WarehouseError("product_not_found")
@@ -29,7 +29,7 @@ class ShortageController:
             fits = min(int((rack[name]["capacity"] - rack[name]["used"]) // unit[name]) for name in self.inventory.capacity.METRICS)
             placed = min(remaining, max(0, fits))
             if placed:
-                self.inventory.write_change(connection, product_id, rack["location_id"], placed, "RETURN:" + operation_id)
+                self.inventory.write_change(connection, product_id, rack["location_id"], placed, "RETURN:" + operation_id, order_id=order_id)
                 returns.append({"product_id": product_id, "location_id": rack["location_id"], "quantity": placed})
                 remaining -= placed
             if not remaining:
@@ -42,6 +42,12 @@ class ShortageController:
             raise WarehouseError("invalid_actual_quantity")
         if not isinstance(operation_id, str) or not operation_id.strip():
             raise WarehouseError("operation_required")
+        from controllers.shop_scope import is_unified
+        with closing(connect(self.db_path)) as db:
+            unified = is_unified(db)
+        if unified:
+            from controllers.shared_shortage import reconcile
+            return reconcile(self,list_id,product_id,location_id,actual_quantity,operation_id,recorded_quantity)
         with closing(connect(self.db_path)) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             prior = connection.execute("SELECT * FROM shortage_events WHERE operation_id = ?", (operation_id,)).fetchone()

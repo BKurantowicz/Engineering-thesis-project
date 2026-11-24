@@ -46,6 +46,8 @@ ADDITIVE_TABLES = {
 
 class WarehouseRegistry:
     def __init__(self, auth):
+        if auth.unified:
+            raise ValueError('legacy_warehouse_registry')
         self.auth = auth
 
     def paths(self):

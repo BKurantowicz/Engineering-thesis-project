@@ -1,3 +1,6 @@
+from controllers.auth_controller import bind
+from controllers.auth_controller import reading
+from controllers.shop_scope import connect
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timedelta
@@ -6,12 +9,14 @@ from controllers.capacity_controller import CapacityController
 class DashboardController:
     def __init__(self, db_path):
         self.db_path = db_path
+        bind(self)
 
     def _get_connection(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
 
+    @reading
     def get_order_status_counts(self):
         """Fetch active backlog and orders whose final parcel was dispatched today."""
         counts = {"NEW": 0, "IN_PROGRESS": 0, "PACKED": 0, "SHIPPED": 0} 
@@ -23,7 +28,7 @@ class DashboardController:
                 # 1. Fetch all pending/active orders
                 cursor.execute("""
                     SELECT status_code, COUNT(order_id) as count 
-                    FROM orders 
+                    FROM scope_orders
                     WHERE status_code != 'SHIPPED'
                     GROUP BY status_code
                 """)
@@ -36,12 +41,12 @@ class DashboardController:
                 # Older records without parcel timestamps cannot establish a dispatch date.
                 cursor.execute("""
                     SELECT COUNT(order_id) as count 
-                    FROM orders o
+                    FROM scope_orders o
                     WHERE status_code = 'SHIPPED'
-                    AND NOT EXISTS (SELECT 1 FROM order_shipments s
+                    AND NOT EXISTS (SELECT 1 FROM scope_order_shipments s
                                     WHERE s.order_id=o.order_id AND s.package_id IS NOT NULL
                                       AND s.dispatched_at IS NULL)
-                    AND DATE((SELECT MAX(s.dispatched_at) FROM order_shipments s
+                    AND DATE((SELECT MAX(s.dispatched_at) FROM scope_order_shipments s
                               WHERE s.order_id=o.order_id AND s.package_id IS NOT NULL)) = ?
                 """, (datetime.now().date().isoformat(),))
                 shipped_row = cursor.fetchone()
@@ -53,9 +58,11 @@ class DashboardController:
             
         return counts
 
+    @reading
     def get_warehouse_capacity(self):
         return CapacityController(self.db_path).get_capacity()
 
+    @reading
     def get_order_trend(self, filter_type="7_days"):
         """Fetches dynamic order inflow trend for both current and previous periods."""
         trend_data = {'dates': [], 'current': [], 'previous': []}
@@ -79,7 +86,7 @@ class DashboardController:
                     # 1. Query current period
                     cursor.execute(f"""
                         SELECT DATE(order_date) as dt, COUNT(order_id) as count
-                        FROM orders
+                        FROM scope_orders
                         WHERE DATE(order_date) >= ? 
                         GROUP BY DATE(order_date)
                     """, (trend_data['dates'][0],))
@@ -95,7 +102,7 @@ class DashboardController:
                     
                     cursor.execute(f"""
                         SELECT DATE(order_date) as dt, COUNT(order_id) as count
-                        FROM orders
+                        FROM scope_orders
                         WHERE DATE(order_date) >= ? AND DATE(order_date) <= ?
                         GROUP BY DATE(order_date)
                     """, (prev_start, prev_end))
@@ -123,7 +130,7 @@ class DashboardController:
                     # 1. Query current year
                     cursor.execute("""
                         SELECT strftime('%Y-%m', order_date) as dt, COUNT(order_id) as count
-                        FROM orders
+                        FROM scope_orders
                         WHERE order_date >= date('now', '-1 year')
                         GROUP BY dt
                     """)
@@ -135,7 +142,7 @@ class DashboardController:
                     # 2. Query previous year
                     cursor.execute("""
                         SELECT strftime('%Y-%m', order_date) as dt, COUNT(order_id) as count
-                        FROM orders
+                        FROM scope_orders
                         WHERE order_date >= date('now', '-2 years') 
                         AND order_date < date('now', '-1 year')
                         GROUP BY dt

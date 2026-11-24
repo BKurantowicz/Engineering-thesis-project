@@ -221,6 +221,8 @@ class PickListsView(QWidget):
             self.inventory_changed.emit()
             numbers = lambda key: ", ".join(map(str, result[key])) or self.t("pick_none")
             self.message.setText(self.message.text() + '\n' + self.t("pick_shortage_result").format(fulfilled=numbers("fulfilled"), cancelled=numbers("cancelled"), lists=numbers("affected_lists")))
+            if result.get('other_shops'):
+                self.message.setText(self.message.text()+'\n'+self.t('shop_shortage_private'))
             self.message.show()
         dialog.deleteLater()
 

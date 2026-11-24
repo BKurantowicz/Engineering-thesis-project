@@ -14,7 +14,7 @@
         }
     },
     "paths": {
-        "database": "warehouse.db",
+        "database": "application.db",
         "default_export_dir": "Exports",
         "default_import_dir": "Imports",
         "database_backup_dir": "Backups",

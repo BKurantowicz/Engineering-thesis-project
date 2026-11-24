@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication, QLabel
 
 from controllers.settings_controller import SettingsController
@@ -85,6 +86,7 @@ class SettingsAddressTests(unittest.TestCase):
         for view in self.views:
             view.close()
             view.deleteLater()
+        self.app.sendPostedEvents(None, QEvent.DeferredDelete)
         self.app.processEvents()
 
     def test_repeated_save_and_reopen_preserves_each_address_component(self):
@@ -178,6 +180,10 @@ class SettingsAddressTests(unittest.TestCase):
                         self.assertEqual(self.read_config(), expected)
                         self.assertEqual(self.app.styleSheet(), ThemeManager.get_stylesheet(theme, font_size))
                         view.close()
+                        # Dispose this variant before retheming the next one.
+                        self.views.remove(view)
+                        view.deleteLater()
+                        self.app.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 if __name__ == "__main__":

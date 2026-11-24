@@ -1,4 +1,5 @@
 """Catalogue maintenance and saleable-quantity filtering."""
+from controllers.auth_controller import reading
 from controllers.auth_controller import authorized, bind
 
 from contextlib import closing
@@ -6,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 import math
 
 from controllers.inventory_controller import InventoryController, WarehouseError, connect
+from controllers.shop_scope import is_unified, shop_id
 
 
 class ProductController:
@@ -54,17 +56,19 @@ class ProductController:
             values[field] = cls.number(data.get(field), field, optional=True)
         return values
 
+    @reading
     def get_product(self, product_id):
         with closing(connect(self.db_path)) as connection:
-            product = connection.execute("SELECT * FROM products WHERE product_id = ?", (product_id,)).fetchone()
+            product = connection.execute("SELECT * FROM scope_products WHERE product_id = ?", (product_id,)).fetchone()
         if product is None:
             raise WarehouseError("product_not_found")
         return dict(product)
 
+    @reading
     def get_sku_conflicts(self):
         groups = {}
         with closing(connect(self.db_path)) as connection:
-            for row in connection.execute("SELECT product_id, sku FROM products ORDER BY product_id"):
+            for row in connection.execute("SELECT product_id, sku FROM scope_products ORDER BY product_id"):
                 groups.setdefault(row["sku"].strip().casefold(), []).append(row["product_id"])
         return [ids for ids in groups.values() if len(ids) > 1]
 
@@ -75,13 +79,13 @@ class ProductController:
             connection.execute("BEGIN IMMEDIATE")
             previous = None
             if product_id is not None:
-                previous = connection.execute("SELECT * FROM products WHERE product_id = ?", (product_id,)).fetchone()
+                previous = connection.execute("SELECT * FROM scope_products WHERE product_id = ?", (product_id,)).fetchone()
                 if previous is None:
                     raise WarehouseError("product_not_found")
             if previous is not None and "ean" not in data:
                 values["ean"] = previous["ean"]
             identifiers = {values["sku"].casefold(), values["ean"]} - {None}
-            for row in connection.execute("SELECT product_id, sku, ean FROM products"):
+            for row in connection.execute("SELECT product_id, sku, ean FROM scope_products"):
                 if row["product_id"] != product_id and row["ean"] and row["ean"] in identifiers:
                     raise WarehouseError("duplicate_ean", field="ean")
                 if row["product_id"] != product_id and values["ean"] == row["sku"].strip().casefold():
@@ -94,12 +98,19 @@ class ProductController:
                 cursor = connection.execute(f"INSERT INTO products ({', '.join(self.FIELDS)}) VALUES ({placeholders})", parameters)
                 product_id = cursor.lastrowid
             else:
-                assignments = ", ".join(field + " = ?" for field in self.FIELDS)
+                fields = self.FIELDS
+                if is_unified(connection):
+                    connection.execute('''INSERT INTO shop_prices VALUES(?,?,?) ON CONFLICT(shop_id,product_id)
+                        DO UPDATE SET price_cents=excluded.price_cents''', (shop_id(),product_id,int(values['price']*100)))
+                    fields = tuple(f for f in fields if f != 'price')
+                    parameters = tuple(float(values[f]) if isinstance(values[f], Decimal) else values[f] for f in fields)
+                assignments = ", ".join(field + " = ?" for field in fields)
                 connection.execute(f"UPDATE products SET {assignments} WHERE product_id = ?", parameters + (product_id,))
                 if any(str(previous[field]) != str(float(values[field])) for field in self.MEASUREMENTS):
                     self.inventory.validate_stored_measurements(connection, product_id)
         return product_id
 
+    @reading
     def get_products(self, search_term="", location_id=None, min_quantity=None, max_quantity=None, min_price=None, max_price=None):
         ranges = {}
         for field, lower, upper in (("quantity", min_quantity, max_quantity), ("price", min_price, max_price)):
@@ -112,10 +123,10 @@ class ProductController:
             ranges[field] = (low, high)
         with closing(connect(self.db_path)) as connection:
             connection.execute("BEGIN")
-            products = connection.execute("SELECT * FROM products ORDER BY sku COLLATE NOCASE, product_id").fetchall()
+            products = connection.execute("SELECT * FROM scope_products ORDER BY sku COLLATE NOCASE, product_id").fetchall()
             stock = self.inventory.stock_snapshot(connection)
             if location_id is not None:
-                location = connection.execute("SELECT * FROM locations WHERE location_id = ?", (location_id,)).fetchone()
+                location = connection.execute("SELECT * FROM scope_locations WHERE location_id = ?", (location_id,)).fetchone()
                 if location is None or self.inventory.capacity.is_virtual(location):
                     raise WarehouseError("physical_location_required")
         query = search_term.strip().casefold()
@@ -150,7 +161,7 @@ class ProductController:
     def delete_product(self, product_id):
         with closing(connect(self.db_path)) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
-            if connection.execute("SELECT 1 FROM products WHERE product_id = ?", (product_id,)).fetchone() is None:
+            if connection.execute("SELECT 1 FROM scope_products WHERE product_id = ?", (product_id,)).fetchone() is None:
                 raise WarehouseError("product_not_found")
             for table in ("order_items", "inventory", "inventory_transactions", "pick_allocations", "shortage_events"):
                 if connection.execute(f"SELECT 1 FROM {table} WHERE product_id = ? LIMIT 1", (product_id,)).fetchone():

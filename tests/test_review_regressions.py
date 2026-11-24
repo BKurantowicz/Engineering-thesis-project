@@ -170,29 +170,29 @@ class ReviewRegressionTests(unittest.TestCase):
         self.assertEqual(f.sql('SELECT * FROM inventory', path=target), stock)
         self.assertEqual(f.sql('SELECT operation FROM operation_history', path=target), [('WAREHOUSE_REGISTER',)])
 
-    def test_failed_switch_to_incompatible_registered_file_keeps_current_window(self):
+    def test_failed_switch_to_unassigned_warehouse_keeps_current_window(self):
         from views.session_host import SessionHost
+        from models.application_migration import adapt_database
         f = self.case
-        target = f.registry.create(f.root / 'damaged-after-registration.db')
-        with closing(sqlite3.connect(target)) as db, db:
-            db.execute('ALTER TABLE dict_shipping_methods DROP COLUMN service_name_en')
-        config = dict(paths=dict(database=f.path, accounts=f.auth.path),
-                      localization=dict(language='en'), appearance=dict(theme='light'))
+        target = f.root/'application.db'
+        adapt_database(f.path,target,backup_dir=f.root/'backup',accounts=f.auth.path)
+        config = dict(paths=dict(database=str(target)),localization=dict(language='en'),appearance=dict(theme='light'))
         with patch('views.session_host.QTimer.singleShot'):
-            host = SessionHost(config, self.t)
+            host = SessionHost(config,self.t)
         self.addCleanup(host.close)
-        host.auth.sign_in('admin', 'administrator-secret')
-        host.install(f.path)
-        host.set_access(True)
+        host.auth.sign_in('admin','administrator-secret')
+        host.install(1,1)
+        other = host.registry.create_warehouse('Unassigned')
         original = host.main
-        host.warehouses.setCurrentIndex(host.warehouses.findData(target))
-        with patch.object(host, 'discard', return_value=True), patch('views.session_host.QMessageBox.warning') as warning:
-            host.switch()
-        self.assertIs(host.main, original)
-        self.assertEqual(host.auth.warehouse, f.path)
-        self.assertEqual(host.auth.active_warehouse(), f.path)
-        self.assertEqual(host.warehouses.currentData(), f.path)
-        self.assertEqual(warning.call_args.args[2], self.t.t('warehouse_invalid'))
+        host.warehouses.addItem('Forged selection',other)
+        host.warehouses.setCurrentIndex(host.warehouses.findData(other))
+        with patch.object(host,'discard',return_value=True), patch('views.session_host.QMessageBox.warning') as warning:
+            host.guarded(host.switch)
+        self.assertIs(host.main,original)
+        self.assertEqual(host.auth.warehouse,str(target))
+        self.assertEqual(host.registry.last_context(),[1,1])
+        self.assertEqual(host.warehouses.currentData(),1)
+        self.assertEqual(warning.call_args.args[2],self.t.t('warehouse_forbidden'))
         self.assertTrue(host.main.product_ctrl.get_products())
 
     def test_packing_refresh_and_worker_completion_do_not_restore_smtp_feedback(self):

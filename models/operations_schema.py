@@ -16,10 +16,16 @@ def initialize_operations_schema(cursor):
 
 
 def record_event(connection, operation, product_id=None, location_id=None, quantity=None,
-                 operation_id=None, details='', transaction_id=None):
+                 operation_id=None, details='', transaction_id=None, order_id=None):
     from controllers.auth_controller import actor
     identity = actor()
     connection.execute('''INSERT INTO operation_history(operation,operation_id,product_id,location_id,
         quantity,actor_id,actor_login,details,transaction_id) VALUES(?,?,?,?,?,?,?,?,?)''',
         (operation, operation_id, product_id, location_id, quantity,
          identity['user_id'] if identity else None, identity['login'] if identity else None, details, transaction_id))
+    from controllers.shop_scope import is_unified, shop_id
+    if is_unified(connection):
+        event_shop = shop_id()
+        if order_id is not None:
+            event_shop = connection.execute('SELECT shop_id FROM orders WHERE order_id=?',(order_id,)).fetchone()[0]
+        connection.execute('UPDATE operation_history SET shop_id=?,order_id=? WHERE event_id=last_insert_rowid()', (event_shop,order_id))
