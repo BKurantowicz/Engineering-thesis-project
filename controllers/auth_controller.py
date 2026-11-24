@@ -35,6 +35,8 @@ def ensure_session():
 
 def bind(controller):
     controller._session_epoch = runtime.epoch if runtime else None
+    controller._shop_id = runtime.shop_id if runtime else None
+    controller._warehouse_id = runtime.warehouse_id if runtime else None
 
 
 def can_admin():
@@ -59,6 +61,11 @@ def require_access(controller=None, admin=False):
             raise AuthError('auth_required')
         if runtime.warehouse and hasattr(controller, 'db_path') and str(Path(controller.db_path).resolve()) != runtime.warehouse:
             raise AuthError('warehouse_context_changed')
+        if runtime.unified:
+            runtime.require_context()
+            if controller is not None and (getattr(controller, '_shop_id', runtime.shop_id) != runtime.shop_id
+                    or getattr(controller, '_warehouse_id', runtime.warehouse_id) != runtime.warehouse_id):
+                raise AuthError('shop_context_changed')
 
 
 def authorized(admin=False):
@@ -72,6 +79,16 @@ def authorized(admin=False):
     return decorate
 
 
+def reading(method):
+    """Bind reads to the same revocable context as writes in a running session."""
+    @wraps(method)
+    def call(*args, **kwargs):
+        if runtime is not None:
+            require_access(args[0] if args else None)
+        return method(*args, **kwargs)
+    return call
+
+
 def actor():
     return ensure_session()
 
@@ -82,13 +99,38 @@ class AuthController:
         self.session = None
         self.epoch = 0
         self.warehouse = None
+        self.shop_id = None
+        self.warehouse_id = None
         with closing(self.connect()) as db, db:
+            self.unified = bool(db.execute("SELECT 1 FROM sqlite_master WHERE name='application_schema'").fetchone())
             db.execute("""CREATE TABLE IF NOT EXISTS accounts(
                 user_id TEXT PRIMARY KEY, login TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin','employee')),
                 must_change INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1)""")
-            db.execute("CREATE TABLE IF NOT EXISTS warehouses(path TEXT PRIMARY KEY)")
+            if not self.unified:
+                db.execute("CREATE TABLE IF NOT EXISTS warehouses(path TEXT PRIMARY KEY)")
             db.execute("CREATE TABLE IF NOT EXISTS app_state(key TEXT PRIMARY KEY,value TEXT NOT NULL)")
+
+    def require_context(self):
+        from controllers.shop_controller import ShopController
+        with closing(self.connect()) as db:
+            ShopController(self).require_shop(db, self.shop_id)
+            if self.warehouse_id is not None and not db.execute(
+                    'SELECT 1 FROM shop_warehouses WHERE shop_id=? AND warehouse_id=?',
+                    (self.shop_id,self.warehouse_id)).fetchone():
+                raise AuthError('warehouse_forbidden')
+
+    def select_context(self, shop_id, warehouse_id=None):
+        from controllers.shop_controller import ShopController
+        with closing(self.connect()) as db:
+            ShopController(self).require_shop(db, shop_id)
+            if warehouse_id is not None and not db.execute(
+                    'SELECT 1 FROM shop_warehouses WHERE shop_id=? AND warehouse_id=?',
+                    (shop_id,warehouse_id)).fetchone():
+                raise AuthError('warehouse_forbidden')
+        self.shop_id, self.warehouse_id = shop_id, warehouse_id
+        self.warehouse = self.path
+        self.epoch += 1
 
     def active_warehouse(self):
         self.require()

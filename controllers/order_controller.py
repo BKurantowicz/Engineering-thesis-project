@@ -1,3 +1,6 @@
+from controllers.auth_controller import reading
+from controllers.shop_scope import connect
+from controllers.shop_scope import is_unified, shop_id
 import sqlite3
 from controllers.auth_controller import authorized, bind
 from contextlib import closing
@@ -9,10 +12,11 @@ class OrderValidationError(ValueError):
         self.code = code
 
 class OrderController:
-    def __init__(self, db_path="warehouse.db"):
+    def __init__(self, db_path="application.db"):
         self.db_path = db_path
         bind(self)
 
+    @reading
     def get_orders(self, limit=50, date_filter="", search_term="", sort_by="date_desc", *, identity="", destination="", product="", channel="", detailed=False):
         """
         Fetches a list of orders from the database, applying date filters, 
@@ -37,19 +41,19 @@ class OrderController:
                 o.delivery_street,
                 o.delivery_postal_code,
                 o.delivery_city
-            FROM orders o
-            LEFT JOIN customers c ON o.customer_id = c.customer_id
+            FROM scope_orders o
+            LEFT JOIN scope_customers c ON o.customer_id = c.customer_id
             LEFT JOIN dict_payment_methods pm ON o.payment_method_id = pm.id
-            LEFT JOIN order_shipments sh ON sh.shipment_id = (SELECT MIN(shipment_id) FROM order_shipments WHERE order_id=o.order_id)
+            LEFT JOIN scope_order_shipments sh ON sh.shipment_id = (SELECT MIN(shipment_id) FROM scope_order_shipments WHERE order_id=o.order_id)
             WHERE 1=1
         """
         
         if detailed:
             query = query.replace("o.delivery_city\n", """o.delivery_city, o.channel, o.external_ref, o.sales_snapshot,
                 o.net_cents, o.delivery_cents, o.held, sh.final_shipping_cost, pm.name_en AS payment_en,
-                (SELECT COUNT(*) FROM order_shipments WHERE order_id=o.order_id AND package_id IS NOT NULL) AS parcel_count,
-                (SELECT COUNT(*) FROM order_shipments WHERE order_id=o.order_id AND dispatched_at IS NOT NULL) AS sent_count,
-                (SELECT MAX(dispatched_at) FROM order_shipments WHERE order_id=o.order_id) AS dispatched_at
+                (SELECT COUNT(*) FROM scope_order_shipments WHERE order_id=o.order_id AND package_id IS NOT NULL) AS parcel_count,
+                (SELECT COUNT(*) FROM scope_order_shipments WHERE order_id=o.order_id AND dispatched_at IS NOT NULL) AS sent_count,
+                (SELECT MAX(dispatched_at) FROM scope_order_shipments WHERE order_id=o.order_id) AS dispatched_at
             """, 1)
         params = []
         for term, columns in (
@@ -65,7 +69,7 @@ class OrderController:
             query += " AND fold(o.channel)=?"
             params.append(channel.strip().casefold())
         if product:
-            query += """ AND EXISTS (SELECT 1 FROM order_items i JOIN products p USING(product_id)
+            query += """ AND EXISTS (SELECT 1 FROM scope_order_items i JOIN scope_products p USING(product_id)
                         WHERE i.order_id=o.order_id AND
                         (instr(fold(COALESCE(json_extract(i.sale_snapshot,'$.sku'),p.sku)),?) OR
                          instr(fold(COALESCE(json_extract(i.sale_snapshot,'$.name_pl'),p.name_pl)),?) OR
@@ -133,7 +137,7 @@ class OrderController:
             query += " LIMIT ?"
             params.append(limit)
 
-        with closing(sqlite3.connect(self.db_path)) as conn:
+        with closing(connect(self.db_path)) as conn:
             # Enable sqlite3.Row to allow UI components to access data by column names
             conn.row_factory = sqlite3.Row
             conn.create_function("fold", 1, lambda s: (s or "").casefold())
@@ -141,15 +145,16 @@ class OrderController:
             cursor.execute(query, params)
             return cursor.fetchall()
 
+    @reading
     def get_order_items(self, order_id):
         """Fetches items associated with a specific order."""
         query = """
             SELECT p.sku, p.name_pl, p.name_en, oi.quantity, oi.unit_price, p.weight, oi.sale_snapshot
-            FROM order_items oi
-            JOIN products p ON oi.product_id = p.product_id
+            FROM scope_order_items oi
+            JOIN scope_products p ON oi.product_id = p.product_id
             WHERE oi.order_id = ?
         """
-        with closing(sqlite3.connect(self.db_path)) as conn:
+        with closing(connect(self.db_path)) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute(query, (order_id,))
@@ -179,9 +184,13 @@ class OrderController:
             delivery_data.get('city', '')
         )
 
-        with closing(sqlite3.connect(self.db_path)) as conn, conn:
+        with closing(connect(self.db_path)) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
-            customer = conn.execute("SELECT is_active FROM customers WHERE customer_id = ?", (customer_id,)).fetchone()
+            if is_unified(conn):
+                query = query.replace('delivery_postal_code, delivery_city', 'delivery_postal_code, delivery_city, shop_id')
+                query = query.replace("VALUES (?, 'NEW', ?, ?, ?, ?, ?, ?, ?, ?)", "VALUES (?, 'NEW', ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                params += (shop_id(),)
+            customer = conn.execute("SELECT is_active FROM scope_customers WHERE customer_id = ?", (customer_id,)).fetchone()
             if customer is not None and not customer[0]:
                 raise OrderValidationError("inactive_customer")
             cursor = conn.execute(query, params)

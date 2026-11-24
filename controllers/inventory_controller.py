@@ -1,4 +1,5 @@
 """Transactional physical stock writes shared by catalogue and picking workflows."""
+from controllers.auth_controller import reading
 
 from contextlib import closing
 from decimal import Decimal
@@ -16,10 +17,7 @@ class WarehouseError(ValueError):
         self.details = details
 
 
-def connect(db_path):
-    connection = sqlite3.connect(db_path)
-    connection.row_factory = sqlite3.Row
-    return connection
+from controllers.shop_scope import connect
 
 
 class InventoryController:
@@ -34,16 +32,17 @@ class InventoryController:
             raise WarehouseError("positive_quantity")
         return quantity
 
+    @reading
     def get_locations(self):
         with closing(connect(self.db_path)) as connection:
-            return [dict(row) for row in connection.execute("SELECT * FROM locations WHERE is_archived=0 ORDER BY location_code, location_id")
+            return [dict(row, location_code=row['display_code']) for row in connection.execute("SELECT * FROM scope_locations WHERE is_archived=0 ORDER BY location_code, location_id")
                     if not self.capacity.is_virtual(row)]
 
     def stock_snapshot(self, connection, product_id=None):
         rows = connection.execute("""
-            SELECT i.product_id, i.location_id, i.quantity, l.location_code, l.is_virtual,
+            SELECT i.product_id, i.location_id, i.quantity, l.display_code AS location_code, l.is_virtual,
                    COALESCE(r.reserved, 0) AS reserved
-            FROM inventory i JOIN locations l ON l.location_id = i.location_id
+            FROM inventory i JOIN scope_locations l ON l.location_id = i.location_id
             LEFT JOIN (SELECT product_id, location_id, SUM(reserved_quantity) AS reserved
                        FROM pick_allocations GROUP BY product_id, location_id) r
               ON r.product_id = i.product_id AND r.location_id = i.location_id
@@ -66,10 +65,10 @@ class InventoryController:
         return {"weight": values[0], "volume": values[1] * values[2] * values[3] / 1_000_000}
 
     def placement_limits(self, connection, product_id, location_id, quantity):
-        location = connection.execute('SELECT is_archived FROM locations WHERE location_id=?', (location_id,)).fetchone()
+        location = connection.execute('SELECT is_archived FROM scope_locations WHERE location_id=?', (location_id,)).fetchone()
         if location is None or location[0]:
             raise WarehouseError('physical_location_required')
-        product = connection.execute("SELECT * FROM products WHERE product_id = ?", (product_id,)).fetchone()
+        product = connection.execute("SELECT * FROM scope_products WHERE product_id = ?", (product_id,)).fetchone()
         if product is None:
             raise WarehouseError("product_not_found")
         unit = self.unit_measures(product)
@@ -90,7 +89,7 @@ class InventoryController:
         return selected
 
     @staticmethod
-    def write_change(connection, product_id, location_id, quantity_change, transaction_type, operation_id=None, details=''):
+    def write_change(connection, product_id, location_id, quantity_change, transaction_type, operation_id=None, details='', order_id=None):
         connection.execute("""
             INSERT INTO inventory (product_id, location_id, quantity) VALUES (?, ?, ?)
             ON CONFLICT(product_id, location_id) DO UPDATE SET quantity = quantity + excluded.quantity
@@ -99,7 +98,7 @@ class InventoryController:
                            (product_id, location_id, quantity_change, transaction_type))
         kind, _, reference = transaction_type.partition(':')
         record_event(connection, kind, product_id, location_id, quantity_change,
-                     operation_id or reference or None, details, transaction.lastrowid)
+                     operation_id or reference or None, details, transaction.lastrowid, order_id)
 
     @authorized()
     def add_stock(self, product_id, location_id, quantity):
@@ -111,12 +110,14 @@ class InventoryController:
 
     def validate_stored_measurements(self, connection, product_id):
         locations = {row[0] for row in connection.execute("SELECT location_id FROM inventory WHERE product_id = ? AND quantity > 0", (product_id,))}
-        for rack in self.capacity.calculate(connection)["racks"]:
+        visible = {r[0] for r in connection.execute('SELECT location_id FROM scope_locations')}
+        for rack in self.capacity.calculate(connection, all_locations=True)["racks"]:
             if rack["location_id"] not in locations:
                 continue
             for name in self.capacity.METRICS:
                 metric = rack[name]
+                label = rack['location_code'] if rack['location_id'] in visible else ''
                 if metric["percentage"] is None:
-                    raise WarehouseError("capacity_data", location=rack["location_code"], constraints=[name], alternatives=[])
+                    raise WarehouseError("capacity_data", location=label, constraints=[name], alternatives=[])
                 if metric["used"] > metric["capacity"]:
-                    raise WarehouseError("capacity_exceeded", location=rack["location_code"], constraints=[name], alternatives=[])
+                    raise WarehouseError("capacity_exceeded", location=label, constraints=[name], alternatives=[])

@@ -44,12 +44,12 @@ class OrdersViewTests(unittest.TestCase):
         self.addCleanup(gc.collect)
         self.widgets = []
         self.addCleanup(self.close_widgets)
-        self.database_path = Path(self.temp_dir.name) / "warehouse.db"
+        self.database_path = Path(self.temp_dir.name) / "application.db"
         DatabaseManager(str(self.database_path))
         self.config = {
             "localization": {"language": "en", "date_format": "YYYY-MM-DD"},
             "appearance": {"theme": "dark", "font_size": "medium"},
-            "paths": {"database": "warehouse.db"},
+            "paths": {"database": "application.db"},
         }
         Path("config.json").write_text(json.dumps(self.config), encoding="utf-8")
         self.translator = translator("en", str(ROOT / "utils"))

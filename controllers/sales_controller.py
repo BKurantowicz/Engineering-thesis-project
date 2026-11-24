@@ -1,4 +1,5 @@
 """Transactional sale entry, monetary snapshots and order lifecycle."""
+from controllers.auth_controller import reading
 from controllers.auth_controller import authorized, bind
 import json
 from contextlib import closing
@@ -6,6 +7,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from controllers.customer_controller import CustomerController
 from controllers.inventory_controller import connect
+from controllers.shop_scope import insert
 
 CENT = Decimal("0.01")
 
@@ -38,25 +40,27 @@ class SalesController:
         self.db_path = db_path
         bind(self)
 
+    @reading
     def choices(self):
         with closing(connect(self.db_path)) as db:
             return {key: [dict(r) for r in db.execute(query)] for key, query in {
-                "customers": "SELECT * FROM customers WHERE is_active=1 ORDER BY last_name, first_name",
-                "products": "SELECT * FROM products WHERE is_active=1 ORDER BY sku",
+                "customers": "SELECT * FROM scope_customers WHERE is_active=1 ORDER BY last_name, first_name",
+                "products": "SELECT * FROM scope_products WHERE is_active=1 ORDER BY sku",
                 "payments": "SELECT * FROM dict_payment_methods ORDER BY id",
                 "carriers": "SELECT * FROM dict_shipping_methods ORDER BY shipping_id",
                 "types": "SELECT * FROM dict_package_types ORDER BY base_cost",
             }.items()}
 
+    @reading
     def known_references(self):
         with closing(connect(self.db_path)) as db:
             return {(str(r[0] or "").strip().casefold(), str(r[1]).strip().casefold())
-                    for r in db.execute("SELECT channel, external_ref FROM orders WHERE external_ref IS NOT NULL")}
+                    for r in db.execute("SELECT channel, external_ref FROM scope_orders WHERE external_ref IS NOT NULL")}
 
     @staticmethod
     def editable(db, order_id):
-        row = db.execute("""SELECT * FROM orders WHERE order_id=? AND status_code='NEW'
-            AND NOT EXISTS (SELECT 1 FROM pick_list_orders WHERE order_id=orders.order_id)""", (order_id,)).fetchone()
+        row = db.execute("""SELECT * FROM scope_orders WHERE order_id=? AND status_code='NEW'
+            AND NOT EXISTS (SELECT 1 FROM scope_pick_list_orders WHERE order_id=scope_orders.order_id)""", (order_id,)).fetchone()
         if row is None:
             raise ValueError("order_locked")
         return row
@@ -73,12 +77,13 @@ class SalesController:
             else:
                 raise ValueError("action")
 
+    @reading
     def details(self, order_id):
         with closing(connect(self.db_path)) as db:
-            row = db.execute("SELECT * FROM orders WHERE order_id=?", (order_id,)).fetchone()
+            row = db.execute("SELECT * FROM scope_orders WHERE order_id=?", (order_id,)).fetchone()
             if row is None:
                 raise ValueError("order")
-            items = db.execute("SELECT * FROM order_items WHERE order_id=? ORDER BY item_id", (order_id,))
+            items = db.execute("SELECT * FROM scope_order_items WHERE order_id=? ORDER BY item_id", (order_id,))
             return dict(row), [dict(i) for i in items]
 
     @authorized()
@@ -95,7 +100,7 @@ class SalesController:
             if importing and not reference:
                 raise ValueError("external_ref")
             db.create_function("casefold", 1, lambda value: (value or "").strip().casefold())
-            if reference and db.execute("""SELECT 1 FROM orders WHERE casefold(channel)=?
+            if reference and db.execute("""SELECT 1 FROM scope_orders WHERE casefold(channel)=?
                     AND casefold(external_ref)=? AND order_id != ?""",
                     (channel.casefold(), reference.casefold(), order_id or -1)).fetchone():
                 raise ValueError("duplicate")
@@ -103,7 +108,7 @@ class SalesController:
             if new_customer is not None:
                 values = CustomerController.validate(new_customer)
                 email = (values["email"] or "").casefold()
-                matches = [r[0] for r in db.execute("SELECT customer_id,email FROM customers WHERE email IS NOT NULL")
+                matches = [r[0] for r in db.execute("SELECT customer_id,email FROM scope_customers WHERE email IS NOT NULL")
                            if email and r[1].casefold() == email]
                 if len(matches) > 1:
                     raise ValueError("customer")
@@ -111,9 +116,8 @@ class SalesController:
                     customer_id = matches[0]
                 else:
                     fields = CustomerController.FIELDS
-                    customer_id = db.execute(f"INSERT INTO customers ({','.join(fields)}) VALUES (?,?,?,?,?,?,?)",
-                                             tuple(values[k] for k in fields)).lastrowid
-            customer = db.execute("SELECT * FROM customers WHERE customer_id=? AND is_active=1", (customer_id,)).fetchone()
+                    customer_id = insert(db, 'customers', {k: values[k] for k in fields}).lastrowid
+            customer = db.execute("SELECT * FROM scope_customers WHERE customer_id=? AND is_active=1", (customer_id,)).fetchone()
             if customer is None:
                 raise ValueError("customer")
             recipient = CustomerController.validate(header["recipient"])
@@ -126,10 +130,10 @@ class SalesController:
                     raise ValueError(field)
             delivery = priced_line(1, header["delivery"], header["delivery_vat"])
             original = {r["item_id"]: r for r in db.execute(
-                "SELECT item_id, product_id, sale_snapshot FROM order_items WHERE order_id=?", (order_id,))}
+                "SELECT item_id, product_id, sale_snapshot FROM scope_order_items WHERE order_id=?", (order_id,))}
             snapshots = []
             for item in lines:
-                product = db.execute("SELECT * FROM products WHERE product_id=? AND is_active=1", (item["product_id"],)).fetchone()
+                product = db.execute("SELECT * FROM scope_products WHERE product_id=? AND is_active=1", (item["product_id"],)).fetchone()
                 if not product:
                     raise ValueError("product")
                 saved = priced_line(item["quantity"], item["unit"], item["vat"])
@@ -156,8 +160,7 @@ class SalesController:
                           sales_snapshot=json.dumps(snapshot, ensure_ascii=False), net_cents=net, delivery_cents=delivery["gross_cents"])
             if order_id is None:
                 keys = ",".join(values)
-                order_id = db.execute(f"INSERT INTO orders ({keys}) VALUES ({','.join('?' for _ in values)})",
-                                      tuple(values.values())).lastrowid
+                order_id = insert(db, 'orders', values).lastrowid
             else:
                 db.execute(f"UPDATE orders SET {','.join(k+'=?' for k in values)} WHERE order_id=?",
                            (*values.values(), order_id))

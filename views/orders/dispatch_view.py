@@ -69,6 +69,17 @@ class DispatchDialog(QDialog):
             self.carrier.addItem(row["carrier_name"]+" · "+row["service_name_"+translator.lang_code],row["shipping_id"])
         selectors.addWidget(self.box)
         selectors.addWidget(self.carrier)
+        self.dispatch_warehouse = QComboBox()
+        from controllers import auth_controller as auth
+        if auth.runtime and auth.runtime.unified:
+            from controllers.shop_controller import ShopController
+            self.dispatch_warehouse.setAccessibleName(self.t('dispatch_warehouse'))
+            for warehouse in ShopController(auth.runtime).warehouses(auth.runtime.shop_id):
+                self.dispatch_warehouse.addItem(warehouse['name'],warehouse['warehouse_id'])
+            self.dispatch_warehouse.setCurrentIndex(self.dispatch_warehouse.findData(auth.runtime.warehouse_id))
+            selectors.addWidget(self.dispatch_warehouse)
+        else:
+            self.dispatch_warehouse.hide()
         packing.addLayout(selectors)
         self.scan=QLineEdit()
         self.scan.setPlaceholderText(self.t("scan_code"))
@@ -102,6 +113,7 @@ class DispatchDialog(QDialog):
         self.parcel_table.itemSelectionChanged.connect(self.show_mail_status)
         self.tabs.currentChanged.connect(self.show_mail_status)
         self.orders.currentIndexChanged.connect(self.choose_order)
+        self.dispatch_warehouse.currentIndexChanged.connect(self.clear_draft)
         self.choose_order()
         if confirm:
             self.tabs.setCurrentIndex(1)
@@ -148,7 +160,7 @@ class DispatchDialog(QDialog):
         selected_ids = {p["shipment_id"] for p in self.selection()} if hasattr(self, "parcels") else set()
         self.parcel_table.blockSignals(True)
         self.parcel_table.clearSelection()
-        self.items=self.ctrl.packing_lines(self.orders.currentData())
+        self.items=self.ctrl.packing_lines(self.orders.currentData(),self.dispatch_warehouse.currentData())
         self.lines.setRowCount(len(self.items))
         for r,item in enumerate(self.items):
             for c,val in enumerate((item["sku"],item["name_"+self.translator.lang_code],item["remaining"],self.draft.get(item["item_id"],0))):
@@ -188,7 +200,8 @@ class DispatchDialog(QDialog):
         self.refresh()
 
     def seal(self):
-        shipment=self.ctrl.add_parcel(self.orders.currentData(),self.box.currentData(),self.carrier.currentData(),self.draft,self.token)
+        shipment=self.ctrl.add_parcel(self.orders.currentData(),self.box.currentData(),self.carrier.currentData(),self.draft,self.token,
+                                      dispatch_warehouse=self.dispatch_warehouse.currentData())
         self.clear_draft()
         self.tabs.setCurrentIndex(1)
         for row, parcel in enumerate(self.parcels):
@@ -315,7 +328,8 @@ class DispatchDialog(QDialog):
         selected=self.selection()
         if selected:
             parcel=selected[0]
-            self.parcel_details.setPlainText(f"ORD-{parcel['order_id']:05d} / {self.t('dispatch_id')} {parcel['shipment_id']}\n{parcel['contents']}")
+            warehouse = (self.t('dispatch_warehouse')+': '+parcel['warehouse_name']+'\n') if parcel.get('warehouse_name') else ''
+            self.parcel_details.setPlainText(f"ORD-{parcel['order_id']:05d} / {self.t('dispatch_id')} {parcel['shipment_id']}\n{warehouse}{parcel['contents']}")
             detail=parcel.get("mail_detail")
             if detail:
                 self.message.setText(self.t("mail_"+detail,self.t("mail_notification_error")))

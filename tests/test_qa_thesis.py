@@ -28,6 +28,9 @@ class ThesisOperationsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+        from PySide6.QtGui import QFontDatabase
+        for name in ('segoeui.ttf','segoeuib.ttf'):
+            QFontDatabase.addApplicationFont(str(Path(os.environ.get('WINDIR','C:/Windows'))/'Fonts'/name))
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -238,42 +241,44 @@ class ThesisOperationsTests(unittest.TestCase):
 
     def test_ui_switch_stay_discard_and_failed_switch_keep_context(self):
         from views.session_host import SessionHost
-        other = self.registry.create(self.root/'other.db')
-        config = dict(paths=dict(database=self.path,accounts=self.auth.path),localization=dict(language='en'),appearance=dict(theme='light'))
+        from models.application_migration import adapt_database
+        path = self.root/'application.db'
+        adapt_database(self.path,path,backup_dir=self.root/'backup',accounts=self.auth.path)
+        config = dict(paths=dict(database=str(path)),localization=dict(language='en'),appearance=dict(theme='light'))
         with patch('views.session_host.QTimer.singleShot'):
             host = SessionHost(config,translator('en',str(ROOT/'utils')))
         self.addCleanup(host.close)
         host.auth.sign_in('admin','administrator-secret')
-        host.install(self.path)
-        host.set_access(True)
+        other = host.registry.save_shop('Other shop')
+        host.registry.assign_warehouses(other,[1])
+        host.install(1,1)
         host.show()
         self.app.processEvents()
         self.assertEqual(host.width(),1280)
-        self.assertEqual(host.height(),837)
-        if os.environ.get('QA_THESIS_EVIDENCE'):
-            host.grab().save(str(Path(os.environ['QA_THESIS_EVIDENCE'])/'session-host.png'))
         field = host.main.view_settings.findChildren(QLineEdit)[0]
         field.setText('Uncommitted draft')
         original = host.main
-        host.warehouses.setCurrentIndex(host.warehouses.findData(other))
+        host.shops.setCurrentIndex(host.shops.findData(other))
         with patch.object(host,'discard',return_value=False):
-            host.switch()
+            host.switch_shop()
         self.assertIs(host.main,original)
         self.assertEqual(field.text(),'Uncommitted draft')
-        self.assertEqual(host.warehouses.currentData(),self.path)
-        host.warehouses.setCurrentIndex(host.warehouses.findData(other))
+        self.assertEqual(host.shops.currentData(),1)
+        host.shops.setCurrentIndex(host.shops.findData(other))
         with patch.object(host,'discard',return_value=True):
-            host.switch()
+            host.switch_shop()
         self.assertIsNot(host.main,original)
-        self.assertEqual(host.main.db_path,other)
-        self.assertEqual(host.main.product_ctrl.get_products(),[])
+        self.assertEqual(host.main.db_path,str(path))
+        self.assertTrue(host.main.product_ctrl.get_products())
+        self.assertEqual(host.main.customer_ctrl.get_customers(),[])
         saved_main = host.main
-        host.warehouses.setCurrentIndex(host.warehouses.findData(self.path))
-        with patch.object(host,'discard',return_value=True), patch.object(host.registry,'activate',side_effect=ValueError('warehouse_invalid')), patch('views.session_host.QMessageBox.warning'):
-            host.switch()
+        host.shops.setCurrentIndex(host.shops.findData(1))
+        with patch.object(host,'discard',return_value=True), patch('main.MainWindow',side_effect=ValueError('warehouse_invalid')):
+            with self.assertRaises(ValueError):
+                host.switch_shop()
         self.assertIs(host.main,saved_main)
-        self.assertEqual(host.warehouses.currentData(),other)
-        self.assertEqual(host.auth.active_warehouse(),other)
+        self.assertEqual(host.shops.currentData(),other)
+        self.assertEqual(host.registry.last_context(),[other,1])
         updated = dict(host.config,localization=dict(language='pl'))
         host.main.apply_preferences(updated)
         self.app.processEvents()

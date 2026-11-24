@@ -37,6 +37,9 @@ class ProductDialog(QDialog):
             editor.setObjectName("product_" + field)
             form.addRow(translator.t("prod_" + field), editor)
             self.fields[field] = editor
+        from controllers import auth_controller as auth
+        if auth.runtime and auth.runtime.unified:
+            self.fields['price'].setToolTip(translator.t('shop_price_hint'))
         layout.addLayout(form)
         self.error_label = QLabel()
         self.error_label.setObjectName("error_label")

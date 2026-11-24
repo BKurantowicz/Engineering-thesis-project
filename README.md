@@ -6,7 +6,7 @@ This engineering thesis project is a Python/PySide6 desktop application for stor
 and warehouse operations. It provides order entry and import, parcel packing and dispatch, invoices and shipment mail, customer and product
 maintenance, physical stock capacity checks, persistent picking workflows,
 shortage reconciliation, dashboard analytics, and application settings. SQLite
-stores business data; JSON stores configuration. English and Polish interfaces
+stores business data, accounts and shop-specific configuration; JSON stores installation preferences. English and Polish interfaces
 share Dark, Light, and Modern themes.
 
 [updates.md](updates.md) records change history. This README describes the current
@@ -28,42 +28,50 @@ application and its operational limits.
 
 Operators can enter, import and maintain eligible orders, pack fully picked goods,
 export parcels, confirm tracking and retrieve the final invoice. Carrier label
-purchasing, merchandise returns, user assignment, operational backups, route
+purchasing, merchandise returns, operational backup scheduling and route
 optimization remain outside these workflows.
 
-## Accounts and warehouse operations
+## Shops, accounts and warehouse operations
 
-On first launch, explicitly create the first administrator, then sign in. The
-application exposes no operational window before authentication. Administrators
-create employee accounts and reset employee passwords in **Accounts**. Employees
-must replace their temporary password after creation or reset, before entering a
-warehouse. **Change password** changes the current user's credential. Passwords
-use salted PBKDF2-SHA256 hashes; resetting/changing credentials invalidates older
-sessions. Accounts live in the shared `accounts.db` (optional `paths.accounts`),
-independently of warehouse files. Existing warehouse `users` rows are retained as
-legacy history and are not login credentials.
+The application uses one relational `application.db`. Shops own customers, orders,
+pick lists, parcels, invoices, business details and SMTP settings. Products form a
+shared catalogue. Each shop can override a product's sale price; absent an override,
+the base product price applies. Editing a price in an existing product form updates
+the active shop's override. Existing order and invoice snapshots remain unchanged.
 
-The sidebar dropdown switches registered warehouse files without restarting. It shows
-the filename and directory to distinguish duplicate filenames. Administrators can
-create an empty warehouse with the current schema/reference dictionaries or
-register a compatible existing database. Creation never overwrites a file and
-does not copy catalogue, customers, orders or stock. The warehouse schema is
-checked read-only for all required application columns before
-registration or activation, including carrier names, package dimensions and mail
-job fields. Pre-v7 warehouses remain supported through additive history migration.
-The most recently selected
-warehouse is remembered in the shared account store. Failed validation leaves the
-current warehouse selected. **Sign out** and warehouse switching offer explicit
-discard-and-continue or stay; staying keeps the current window and drafts intact.
+On first launch, explicitly create the first administrator and sign in. Accounts
+live in the application database. Administrators create employee accounts and reset
+temporary passwords in **Accounts**. Employees must change their temporary password
+before business access. Passwords use salted PBKDF2-SHA256 hashes; password and
+membership changes invalidate old sessions. Legacy `users` identities remain as
+historical references and are not invented login credentials.
 
-Employees can edit products, customers and orders, cancel eligible NEW orders,
-receive/withdraw/transfer stock and inspect history. Only administrators can
-delete products/customers, create/register warehouses and create/archive racks.
-Reference protection still applies to administrators. Business operation entry
-points recheck roles and session/warehouse context; stale controllers cannot write
-after logout or switching warehouses. Offline mock generation and legacy fixture
-tests use an explicit maintenance context, unavailable while an application
-session is installed.
+**Manage shops and access** creates/renames shops, creates empty warehouse records,
+assigns warehouses to shops and grants employees one, several or all shops.
+All-shops access includes future shops. Administrators access every shop; an employee
+without assignments can sign in but sees a localized no-access screen. Shop deletion
+is not provided. Warehouse assignment removal is blocked by reservations, picked but
+undispatched goods and unfinished parcels.
+
+The sidebar identifies the active shop and warehouse. Both selectors refer to records
+in the same database. Switching rebuilds the business views and invalidates old
+controllers; **stay** preserves the current drafts. A failed switch restores the old
+context. The selected warehouse is used for rack creation and delivery CSV rack-name
+resolution, and is the default dispatch warehouse. Product availability and capacity
+aggregate the shop's assigned warehouses, with rack labels including warehouse names.
+The last context is remembered per account.
+
+Shops sharing a warehouse share its physical stock and reservations: reserving six
+of ten units leaves four available to every other shop using it. Stock and capacity
+are counted once. A warehouse assigned only to another shop is not available through
+selectors, imports or direct business operations. File-based warehouse registration
+is a legacy maintenance interface, not part of the unified runtime.
+
+Employees retain catalogue, customer, order and physical-stock operations within their
+assigned scope. Only administrators manage shops/memberships/warehouse assignments,
+edit shop business/SMTP settings, delete unused products/customers or create/archive
+racks. Reads, writes and background mail recheck session context. Offline fixtures
+use the existing explicit maintenance context.
 
 Shipment-mail workers bind to their initiating session and recheck authorization
 before claiming a job, opening SMTP and submitting the message. Logout, a required
@@ -88,12 +96,32 @@ submitted message retains its actual delivery outcome.
   confirm its additive receipt. **Save CSV example** exports the format. Every row
   must reference existing catalogue/rack identifiers and a positive whole quantity;
   aggregate capacity is checked. One invalid row rejects the entire file. A delivery
-  number is required and unique per warehouse, including retries with changed
+  number is required and unique per physical warehouse, including retries with changed
   contents. Preview/cancel does not change stock or history.
 - **Operation history:** filter by date, operation, SKU and rack; inspect time,
   quantities, shared actor identity, details and linked transfer/import IDs. Old
   inventory transactions remain visible with unavailable actor data. Failed writes
-  never become completed history entries.
+  never become completed history entries. Employees see authorized shared-stock movements
+  with foreign-shop private references removed; administrators can inspect full history.
+
+### Multi-warehouse fulfillment
+
+One order can reserve and pick from several warehouses assigned to its shop. Pick
+instructions show warehouse and rack names. The packing view selects one dispatch
+warehouse per parcel and offers only picked, unpacked quantities from that warehouse.
+Another parcel can use the other warehouse; multiple parcels from the same warehouse
+are also allowed. Packing cannot reuse picked units or silently consolidate warehouses.
+Separate tracking confirmations retain the same originating order. The order remains
+incomplete until its required parcels are dispatched; the final parcel creates one
+invoice using the originating shop's settings and its independent yearly sequence.
+
+A physical shortage reconciles all affected open orders across shops, oldest first,
+fulfilling complete orders when authorized warehouse stock permits and cancelling
+unfillable orders before considering later ones. Physical picked returns stay within
+their source warehouse; only nonexistent quantities enter its virtual `braki` rack.
+Reservations, stock changes and history commit together. Repeating the same count
+operation does not duplicate returns or missing-stock records. Employee feedback
+omits other shops' order and customer details.
 
 ## From order entry to delivery
 
@@ -144,7 +172,7 @@ submitted message retains its actual delivery outcome.
 
 **Import** accepts UTF-8 semicolon CSV with a header, or a JSON object/array using
 the same keys. Each record represents one line. Use the product SKU and dictionary
-values from the target database. The grouping and duplicate key is the pair
+values from the target database. The grouping and duplicate key is the pair within the active shop
 `Platforma`, `Nr_Zewnetrzny`. An example with current demonstration dictionary values:
 
 ```csv
@@ -160,15 +188,18 @@ rolled back in full. Other valid orders may still be imported.
 
 ### Outbound SMTP and settings
 
-Configure the sender, host, port, username and TLS/STARTTLS under Company Data.
+As Admin, configure the active shop's sender, host, port, username and TLS/STARTTLS
+under Company Data. New documents and notification jobs use the originating shop's
+settings. Shops may reuse the same sender account; missing settings never fall back
+to another shop's configuration.
 Enter a new SMTP password and save. On Windows, the application encrypts it with
 per-user DPAPI and stores the encrypted credential in user settings. Application
 configuration keeps its reference. WMS_SMTP_PASSWORD is an alternative for a
 configured account without a saved credential. LOCAL transport is limited to a
 loopback test receiver. A successful send means the SMTP server accepted the
-message. Directory pickers cover the database, pick worksheets, carrier CSVs,
-invoices and imports. Use the sidebar warehouse dropdown for live database switching;
-the configured database path is the initial warehouse candidate. Language and fullscreen
+message. Directory pickers cover pick worksheets, carrier CSVs, invoices and imports.
+The runtime database path is read-only in Settings; shop and warehouse selectors
+change record context without switching files. Language and fullscreen
 settings apply on save. Optional list-generation confirmations can be restored
 in System settings. Seller bank and BDO fields are optional.
 
@@ -226,17 +257,54 @@ startup does not require directory renaming or Python case-handling overrides.
 Database initialization creates missing tables and leaves existing business
 records intact.
 
-### Database Selection
+### Unified database and selected-source migration
 
-`config.json` supplies the initial database through `paths.database`. Database
-initialization, Dashboard, Orders, Customers, Products, and Pick Lists use that
-same path, including reloads, details, and controller write operations. When the
-key is absent, the default is `warehouse.db`.
+Ordinary startup uses `application.db` in the project root. The entry point resolves
+its working directory to the project directory, so launching `main.py` from another
+folder does not create another installation. Views and controllers use the same file;
+shop and warehouse switching never changes it. Existing legacy data requires explicit
+adaptation. Startup does not silently fall back to `warehouse.db` or a QA runtime path.
 
-Relative paths resolve from the process working directory; absolute paths are
-used as supplied. Administrators register additional files through the sidebar;
-all users switch registered warehouses using its dropdown. Switching replaces
-views, controllers and filters together; it never copies business records.
+The selected business source for this iteration is `User Stories/qa-runtime/qa.db`.
+Keep this file. `warehouse.db` is obsolete and is not an import source. Close the
+application before adaptation and run from the checkout containing the new code:
+
+```powershell
+python -B -m models.application_migration --source "User Stories/qa-runtime/qa.db" --target application.db --backup-dir Backups --config config.json
+```
+
+The migration preserves a consistent source snapshot as
+`Backups/qa-before-shops-<digest>.db`, adapts an isolated staging file, compares every
+original table value (including documents and snapshots), checks foreign keys and
+integrity, then publishes the target exclusively. It never overwrites an existing
+unrelated target. A retry with the same source recognizes provenance and does not
+reset records created after adaptation. Unexpected incompatible values stop migration.
+No generic multi-source consolidation or automatic demo reset is provided.
+
+Before migrating identities, locate the installation's real shared-account store.
+If one exists, add `--accounts <actual-path>`; account IDs, password hashes, roles and
+historical actors are retained. Do not supply a nonexistent path. No account store
+was found in the selected installation's inspected locations, so it requires the
+normal explicit first-administrator setup. No passwords or accounts are fabricated.
+
+After validating the adapted application, complete the configuration cutover and
+remove only the obsolete sibling `warehouse.db`:
+
+```powershell
+python -B -m models.application_migration --source "User Stories/qa-runtime/qa.db" --target application.db --backup-dir Backups --config config.json --cutover --remove-obsolete
+```
+
+Cutover changes only `paths.database`, preserves other configuration values, and
+keeps the original config bytes in `Backups/config-before-shops-<digest>.json`.
+The source QA database and its recovery copy remain intact. Backups are excluded
+from Git. In an isolated worktree, point `--source` and initial `--config` at the
+actual source files; do not mistake an isolated test target for a primary-checkout
+cutover. Apply the primary cutover after the new code is integrated there.
+
+For recovery, close the application and preserve the current target if it contains
+new work. Restore the saved config and use the retained QA source with the previous
+code, or rerun adaptation to a new target in an isolated recovery directory. Do not
+replace a live database with the pre-adaptation snapshot or erase subsequent work.
 
 ## Browsing Existing Orders
 
@@ -416,7 +484,9 @@ python seed_demo.py --database demo.db --replace-mock
 The complete dataset is built in a temporary sibling file and replaces the target
 only after generation succeeds. Existing targets are refused without the flag;
 active SQLite sidecars prevent replacement. Startup never seeds destructively.
-Register `demo.db` as an administrator and select it in the warehouse dropdown.
+Use demo data only in a separate development checkout. Adapt `demo.db` with the
+migration command above into that checkout's `application.db`; do not replace the
+selected QA source or an existing operational target.
 
 For a larger visual acceptance dataset (100 products with EANs, 50 customers,
 300 orders over the last 90 days and 23 physical racks):
@@ -521,15 +591,16 @@ Views use controllers for persistence and share the translator/theme manager.
 InventoryController is the common physical-write/capacity guard; picking and
 shortage controllers operate within SQLite write transactions. DatabaseManager
 initializes tables and calls the additive warehouse, sales and operations schema
-initializers. SessionHost owns authentication and replaces MainWindow on warehouse
-switching. AuthController stores shared accounts and registry state; WarehouseController
+initializers. The explicit shop migration adds scoped identities and relationship
+guards. SessionHost owns authentication and replaces MainWindow on shop/warehouse
+switching. AuthController and ShopController use the same application database; WarehouseController
 uses the same capacity and inventory write routines as picking.
 
 ```mermaid
 classDiagram
     SessionHost *-- MainWindow
     SessionHost --> AuthController
-    SessionHost --> WarehouseRegistry
+    SessionHost --> ShopController
     MainWindow *-- WarehouseView
     WarehouseView --> WarehouseController
     WarehouseController --> InventoryController
@@ -567,11 +638,14 @@ unique, and foreign keys; comments identify nullable non-key fields and units.
 Composite primary keys protect inventory pairs and list/order links.
 
 The additional `operation_history` table records event time/type, linked operation
-ID, product/location, signed quantity, shared actor ID/login, details and optional
-unique inventory transaction ID. `delivery_receipts` uniquely records each warehouse's
-delivery number and import operation ID. Shared `accounts`, `warehouses` and
-`app_state` tables live in the separate account database, not in this diagram.
-Shared actors deliberately do not reference the legacy per-warehouse `users` table.
+ID, product/location, signed quantity, actor ID/login, shop/order attribution, details
+and optional unique inventory transaction ID. `delivery_receipts` uniquely records each warehouse's
+delivery number and import operation ID. `accounts`, `account_shops`, `app_state`,
+`shops`, `shop_warehouses`, `physical_warehouses`, `shop_prices`, `shop_settings` and
+`invoice_sequences` live in this same database. Shared actors retain account IDs;
+legacy warehouse `users` references are preserved. Customer email, import reference
+and invoice-number uniqueness are scoped to shops; rack codes and receipt numbers
+are scoped to warehouses. The core diagram below omits these administration tables.
 
 ```mermaid
 erDiagram
@@ -579,7 +653,8 @@ erDiagram
         int customer_id PK
         string first_name
         string last_name
-        string email UK "nullable"
+        int shop_id FK
+        string email "nullable, unique within shop"
         string street
         string postal_code
         string city
@@ -631,7 +706,8 @@ erDiagram
         string document "nullable immutable snapshot"
         int invoice_id PK
         int order_id FK "nullable"
-        string invoice_number UK
+        int shop_id FK
+        string invoice_number "unique within shop"
         string company_name "nullable"
         string tax_id "nullable"
         string billing_name "nullable"
@@ -643,7 +719,8 @@ erDiagram
     }
     LOCATIONS {
         int location_id PK
-        string location_code UK
+        int warehouse_id FK
+        string location_code "unique within warehouse"
         float max_weight "kg"
         float max_volume "m3"
         int is_virtual
@@ -669,6 +746,7 @@ erDiagram
         float final_shipping_cost
     }
     ORDERS {
+        int shop_id FK
         string channel
         string external_ref
         string sales_snapshot
@@ -705,6 +783,7 @@ erDiagram
     }
     PACKAGES {
         int package_id PK
+        int warehouse_id FK
         int order_id FK
         string package_code FK
         string tracking_number UK "nullable"
@@ -730,6 +809,7 @@ erDiagram
     }
     PICK_LISTS {
         int pick_list_id PK
+        int shop_id FK
         string status "nullable"
         int assigned_user_id FK "nullable"
         datetime created_at "nullable"

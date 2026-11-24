@@ -1,4 +1,4 @@
-"""Database selection integration coverage using isolated, distinguishable files."""
+"""Explicit controller-path isolation, independent of the unified session host."""
 
 from contextlib import closing
 import gc
@@ -93,6 +93,7 @@ class DatabasePathTests(unittest.TestCase):
         self.assertFalse(Path("warehouse.db").exists())
         window = self.open_window()
         self.assert_same_path(window, "configured.db")
+        self.assertFalse(Path("application.db").exists())
         self.assertEqual(self.order_ids(window), {101, 102})
         self.assertEqual(window.dashboard_ctrl.get_order_status_counts()["NEW"], 2)
         window.view_orders.load_orders()
@@ -119,7 +120,7 @@ class DatabasePathTests(unittest.TestCase):
         self.assertEqual(Path("warehouse.db").read_bytes(), unselected_before)
 
     def test_relative_absolute_and_default_paths_keep_existing_resolution(self):
-        paths = ["data/relative.db", str(Path(self.temp_dir.name) / "absolute.db"), "warehouse.db"]
+        paths = ["data/relative.db", str(Path(self.temp_dir.name) / "absolute.db"), "application.db"]
         for index, path in enumerate(paths):
             with self.subTest(path=path):
                 order_id = 100 + index

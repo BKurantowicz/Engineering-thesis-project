@@ -205,7 +205,9 @@ class DashboardView(QWidget):
         selected_id = self.capacity_scope.currentData()
         self.capacity_scope.blockSignals(True)
         self.capacity_scope.clear()
-        self.capacity_scope.addItem(self.translator.t("cap_warehouse"), None)
+        from controllers import auth_controller as auth
+        key = 'shop_all_warehouses' if auth.runtime and auth.runtime.unified else 'cap_warehouse'
+        self.capacity_scope.addItem(self.translator.t(key), None)
         for rack in self.capacity_data["racks"]:
             self.capacity_scope.addItem(rack["location_code"], rack["location_id"])
         selected_index = self.capacity_scope.findData(selected_id)

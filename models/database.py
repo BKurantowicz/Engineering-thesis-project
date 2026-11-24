@@ -6,7 +6,7 @@ from models.warehouse_schema import initialize_warehouse_schema
 from models.operations_schema import initialize_operations_schema
 
 class DatabaseManager:
-    def __init__(self, db_path="warehouse.db"):
+    def __init__(self, db_path="application.db"):
         self.db_path = db_path
         self.initialize_database()
 

@@ -1,4 +1,7 @@
 """Customer master-data access and validation, independent of historical orders."""
+from controllers.auth_controller import reading
+from controllers.shop_scope import connect
+from controllers.shop_scope import insert
 from controllers.auth_controller import authorized, bind
 
 from contextlib import closing
@@ -19,20 +22,21 @@ class CustomerController:
     FIELDS = ("first_name", "last_name", "street", "postal_code", "city", "email", "phone")
     REQUIRED_FIELDS = FIELDS[:5]
 
-    def __init__(self, db_path="warehouse.db"):
+    def __init__(self, db_path="application.db"):
         self.db_path = db_path
         bind(self)
 
     def _connect(self):
-        connection = sqlite3.connect(self.db_path)
+        connection = connect(self.db_path)
         connection.row_factory = sqlite3.Row
         return connection
 
+    @reading
     def get_customers(self, search_term=""):
         with closing(self._connect()) as connection:
             customers = connection.execute(
                 "SELECT customer_id, first_name, last_name, street, postal_code, city, email, phone, is_active "
-                "FROM customers ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE, customer_id"
+                "FROM scope_customers ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE, customer_id"
             ).fetchall()
         query = search_term.strip().casefold()
         if not query:
@@ -42,11 +46,12 @@ class CustomerController:
             for field in ("email", "first_name", "last_name", "city")
         )]
 
+    @reading
     def get_customer(self, customer_id):
         with closing(self._connect()) as connection:
             customer = connection.execute(
                 "SELECT customer_id, first_name, last_name, street, postal_code, city, email, phone, is_active "
-                "FROM customers WHERE customer_id = ?", (customer_id,),
+                "FROM scope_customers WHERE customer_id = ?", (customer_id,),
             ).fetchone()
         if customer is None:
             raise CustomerValidationError("not_found")
@@ -71,17 +76,18 @@ class CustomerController:
     def delete_customer(self, customer_id):
         with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
-            if connection.execute("SELECT 1 FROM customers WHERE customer_id = ?", (customer_id,)).fetchone() is None:
+            if connection.execute("SELECT 1 FROM scope_customers WHERE customer_id = ?", (customer_id,)).fetchone() is None:
                 raise CustomerValidationError("not_found")
-            if connection.execute("SELECT 1 FROM orders WHERE customer_id = ? LIMIT 1", (customer_id,)).fetchone():
+            if connection.execute("SELECT 1 FROM scope_orders WHERE customer_id = ? LIMIT 1", (customer_id,)).fetchone():
                 raise CustomerValidationError("referenced")
             connection.execute("DELETE FROM customers WHERE customer_id = ?", (customer_id,))
 
+    @reading
     def get_email_conflicts(self):
         """Report legacy collisions without merging, deleting, or rewriting rows."""
         groups = {}
         with closing(self._connect()) as connection:
-            for row in connection.execute("SELECT customer_id, email FROM customers ORDER BY customer_id"):
+            for row in connection.execute("SELECT customer_id, email FROM scope_customers ORDER BY customer_id"):
                 key = self._email_key(row["email"])
                 if key:
                     groups.setdefault(key, []).append(row["customer_id"])
@@ -94,20 +100,17 @@ class CustomerController:
             # Serialize the uniqueness check and write, including separate app instances.
             connection.execute("BEGIN IMMEDIATE")
             if customer_id is not None and connection.execute(
-                "SELECT 1 FROM customers WHERE customer_id = ?", (customer_id,),
+                "SELECT 1 FROM scope_customers WHERE customer_id = ?", (customer_id,),
             ).fetchone() is None:
                 raise CustomerValidationError("not_found")
             email_key = self._email_key(values["email"])
             if email_key:
-                for row in connection.execute("SELECT customer_id, email FROM customers WHERE email IS NOT NULL"):
+                for row in connection.execute("SELECT customer_id, email FROM scope_customers WHERE email IS NOT NULL"):
                     if row["customer_id"] != customer_id and self._email_key(row["email"]) == email_key:
                         raise CustomerValidationError("duplicate_email", "email")
             parameters = tuple(values[field] for field in self.FIELDS)
             if customer_id is None:
-                cursor = connection.execute(
-                    "INSERT INTO customers (first_name, last_name, street, postal_code, city, email, phone) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)", parameters,
-                )
+                cursor = insert(connection, 'customers', values)
                 customer_id = cursor.lastrowid
             else:
                 connection.execute(

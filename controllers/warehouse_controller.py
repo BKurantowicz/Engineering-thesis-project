@@ -1,4 +1,5 @@
 """Atomic rack administration, free withdrawals, reserved transfers and CSV receipts."""
+from controllers.auth_controller import reading
 from contextlib import closing
 import csv
 from pathlib import Path
@@ -9,6 +10,7 @@ import uuid
 from controllers.auth_controller import authorized
 from controllers.inventory_controller import InventoryController, WarehouseError, connect
 from models.operations_schema import record_event
+from controllers.shop_scope import insert, is_unified, warehouse_id
 
 
 class WarehouseController(InventoryController):
@@ -22,16 +24,19 @@ class WarehouseController(InventoryController):
             raise WarehouseError('rack_limits')
         with closing(connect(self.db_path)) as db, db:
             db.execute('BEGIN IMMEDIATE')
-            if any(r[0].strip().casefold() == code.casefold() for r in db.execute('SELECT location_code FROM locations')):
+            if is_unified(db) and warehouse_id() is None:
+                raise WarehouseError('warehouse_required')
+            rack_rows = db.execute('SELECT location_code FROM scope_locations' + (' WHERE warehouse_id=?' if is_unified(db) else ''),
+                                  (warehouse_id(),) if is_unified(db) else ())
+            if any(r[0].strip().casefold() == code.casefold() for r in rack_rows):
                 raise WarehouseError('rack_duplicate')
-            lid = db.execute('INSERT INTO locations(location_code,max_weight,max_volume) VALUES(?,?,?)',
-                             (code, float(measures[0]), float(measures[1]))).lastrowid
+            lid = insert(db, 'locations', dict(location_code=code,max_weight=float(measures[0]),max_volume=float(measures[1]))).lastrowid
             record_event(db, 'RACK_CREATE', location_id=lid, details=code)
             return lid
 
     @staticmethod
     def physical(db, location_id):
-        row = db.execute('SELECT * FROM locations WHERE location_id=?', (location_id,)).fetchone()
+        row = db.execute('SELECT * FROM scope_locations WHERE location_id=?', (location_id,)).fetchone()
         if not row or row['is_archived']:
             raise WarehouseError('physical_location_required')
         from controllers.capacity_controller import CapacityController
@@ -39,6 +44,7 @@ class WarehouseController(InventoryController):
             raise WarehouseError('physical_location_required')
         return row
 
+    @reading
     def rack_dependencies(self, location_id, db=None):
         if db is None:
             with closing(connect(self.db_path)) as connection:
@@ -91,6 +97,12 @@ class WarehouseController(InventoryController):
                 raise WarehouseError('insufficient_available')
             self.placement_limits(db, product_id, target, quantity)
             remaining = max(0, quantity - (physical - reserved))
+            operation = uuid.uuid4().hex
+            if is_unified(db):
+                # Physical transfers include other shops' reservations. Persistent
+                # relationship guards still reject a destination their shop cannot use.
+                for event in ('INSERT','UPDATE','DELETE'):
+                    db.execute(f'DROP TRIGGER IF EXISTS temp.guard_pick_allocations_{event}')
             allocations = db.execute('''SELECT a.* FROM pick_allocations a JOIN orders o USING(order_id)
                 WHERE a.product_id=? AND a.location_id=? AND a.reserved_quantity>0
                 ORDER BY datetime(o.order_date) DESC,o.order_id DESC,a.allocation_id DESC''', (product_id, source)).fetchall()
@@ -113,9 +125,11 @@ class WarehouseController(InventoryController):
                     db.execute('UPDATE pick_allocations SET reserved_quantity=0,cancelled=1 WHERE allocation_id=?',
                                (row['allocation_id'],))
                 remaining -= moved
+                if is_unified(db):
+                    record_event(db, 'RESERVATION_TRANSFER', product_id, target, moved,
+                                 operation, f'from_location={source}', order_id=row['order_id'])
             if remaining:
                 raise WarehouseError('allocation_mismatch')
-            operation = uuid.uuid4().hex
             self.write_change(db, product_id, source, -quantity, 'TRANSFER_OUT', operation)
             self.write_change(db, product_id, target, quantity, 'TRANSFER_IN', operation)
             return operation
@@ -139,7 +153,9 @@ class WarehouseController(InventoryController):
         number = number.strip()
         if not number:
             raise WarehouseError('delivery_number_required')
-        if db.execute('SELECT 1 FROM delivery_receipts WHERE delivery_number=?', (number,)).fetchone():
+        condition = ' AND warehouse_id=?' if is_unified(db) else ''
+        parameters = (number,warehouse_id()) if is_unified(db) else (number,)
+        if db.execute('SELECT 1 FROM delivery_receipts WHERE delivery_number=?'+condition, parameters).fetchone():
             raise WarehouseError('delivery_duplicate')
         operation = uuid.uuid4().hex
         preview = []
@@ -149,8 +165,13 @@ class WarehouseController(InventoryController):
                 if not raw.isascii() or not raw.isdigit():
                     raise WarehouseError('positive_quantity')
                 quantity = self.positive_quantity(int(raw))
-                product = db.execute('SELECT product_id,name_pl,name_en FROM products WHERE sku=?', (row.get('sku'),)).fetchone()
-                location = db.execute('SELECT location_id FROM locations WHERE location_code=?', (row.get('rack'),)).fetchone()
+                product = db.execute('SELECT product_id,name_pl,name_en FROM scope_products WHERE sku=?', (row.get('sku'),)).fetchone()
+                query = 'SELECT location_id FROM scope_locations WHERE location_code=?'
+                parameters = (row.get('rack'),)
+                if is_unified(db):
+                    query += ' AND warehouse_id=?'
+                    parameters += (warehouse_id(),)
+                location = db.execute(query, parameters).fetchone()
                 if not product:
                     raise WarehouseError('product_not_found')
                 if not location:
@@ -165,7 +186,10 @@ class WarehouseController(InventoryController):
         if not preview:
             raise WarehouseError('delivery_format')
         if commit:
-            db.execute('INSERT INTO delivery_receipts(delivery_number,operation_id) VALUES(?,?)', (number, operation))
+            if is_unified(db):
+                db.execute('INSERT INTO delivery_receipts(delivery_number,operation_id,warehouse_id) VALUES(?,?,?)', (number,operation,warehouse_id()))
+            else:
+                db.execute('INSERT INTO delivery_receipts(delivery_number,operation_id) VALUES(?,?)', (number, operation))
         return preview
 
     @authorized()
@@ -186,12 +210,15 @@ class WarehouseController(InventoryController):
     @authorized()
     def history(self, since='', until='', operation='', product='', location=''):
         with closing(connect(self.db_path)) as db:
+            if is_unified(db):
+                from controllers.shared_history import history
+                return history(db,since,until,operation,product,location)
             return [dict(r) for r in db.execute('''WITH events AS (
                 SELECT created_at,operation,operation_id,product_id,location_id,quantity,actor_login,details FROM operation_history
                 UNION ALL SELECT t.created_at,t.transaction_type,NULL,t.product_id,t.location_id,t.quantity_change,NULL,''
                 FROM inventory_transactions t WHERE NOT EXISTS(SELECT 1 FROM operation_history h WHERE h.transaction_id=t.transaction_id))
                 SELECT e.*,p.sku,l.location_code,l.is_archived FROM events e
-                LEFT JOIN products p USING(product_id) LEFT JOIN locations l USING(location_id)
+                LEFT JOIN scope_products p USING(product_id) LEFT JOIN scope_locations l USING(location_id)
                 WHERE (?='' OR date(e.created_at)>=?) AND (?='' OR date(e.created_at)<=?)
                 AND (?='' OR e.operation=?) AND (?='' OR p.sku=?) AND (?='' OR l.location_code=?)
                 ORDER BY e.created_at DESC''', (since,since,until,until,operation,operation,product,product,location,location))]

@@ -9,6 +9,32 @@ versions. Commits and merges alone do not establish that a release occurred.
 
 ## Unreleased
 
+### 2026-11-19 - Unified shops and shared physical warehouses (US-FR-01..08 v6)
+
+- Replace runtime warehouse-file switching with shop and warehouse record contexts
+  in one application database. Add shop/warehouse administration, employee
+  memberships, future all-shop access and a localized no-membership state.
+- Scope customers, orders, imports, pick lists, parcels and invoices to shops;
+  recheck stale contexts, roles and revoked memberships at business boundaries.
+- Share catalogue identity, physical stock, reservations and capacity across assigned
+  warehouses. Store independent shop prices with the leader-approved base-price
+  fallback. Preserve historical sales and invoice snapshots.
+- Pack one dispatch warehouse per parcel and fulfill an order through multiple
+  warehouses. Prevent picked-unit reuse and preserve final-parcel invoice behavior,
+  independent shop invoice sequences and originating-shop mail configuration.
+- Reconcile shared shortages oldest-first across affected shops, preserving atomic
+  stock changes, physical returns, virtual missing stock and restricted feedback.
+- Add preservation-first QA-source adaptation, source/config backups, exact original
+  value comparisons, provenance-aware retries and an explicit validated cutover.
+  Use application.db defaults and retain the selected source for recovery.
+- Keep shop business/SMTP settings in SQLite and installation preferences in JSON;
+  preserve protected credential references and restrict shop settings to Admin.
+- Add isolated controller, migration, concurrency, SMTP-mock and PL/EN theme/UI
+  regressions. Update former file-switching tests for the new record-based model.
+  Dispose completed Settings UI test variants before retheming subsequent windows.
+  Independent Reviewer verification and primary-checkout cutover remain separate
+  delivery steps; this entry does not claim external acceptance checks have run.
+
 ### 2026-11-17 - Review corrections for sessions, warehouses and dispatch feedback
 
 - R-01 / US-TH-02, US-TH-11: require an authenticated, password-ready session

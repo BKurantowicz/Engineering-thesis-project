@@ -1,8 +1,11 @@
 """Physical rack occupancy; reservations never subtract from stored quantities."""
+from controllers.auth_controller import bind
+from controllers.auth_controller import reading
 
 from contextlib import closing
 from decimal import Decimal, InvalidOperation
 import sqlite3
+from controllers.shop_scope import connect
 
 
 class CapacityController:
@@ -10,6 +13,7 @@ class CapacityController:
 
     def __init__(self, db_path):
         self.db_path = db_path
+        bind(self)
 
     @staticmethod
     def positive_decimal(value):
@@ -33,10 +37,11 @@ class CapacityController:
             "reasons": sorted(set(reasons)),
         }
 
+    @reading
     def get_capacity(self):
         """Read a single consistent snapshot without modifying stock or limits."""
         try:
-            with closing(sqlite3.connect(self.db_path)) as connection:
+            with closing(connect(self.db_path)) as connection:
                 connection.row_factory = sqlite3.Row
                 connection.execute("BEGIN")
                 return self.calculate(connection)
@@ -45,9 +50,11 @@ class CapacityController:
                 name: self.metric(None, None, ["database_error"]) for name in self.METRICS
             }}
 
-    def calculate(self, connection):
+    def calculate(self, connection, all_locations=False):
         """Also usable within a caller's inventory write transaction."""
-        locations = connection.execute("SELECT * FROM locations ORDER BY location_code, location_id").fetchall()
+        scoped = not all_locations and connection.execute("SELECT 1 FROM sqlite_temp_master WHERE name='scope_locations'").fetchone()
+        table = 'scope_locations' if scoped else 'locations'
+        locations = connection.execute(f"SELECT * FROM {table} ORDER BY location_code, location_id").fetchall()
         physical = {row["location_id"]: row for row in locations
                     if not self.is_virtual(row) and not dict(row).get('is_archived', 0)}
         known_ids = {row["location_id"] for row in locations}
@@ -56,6 +63,7 @@ class CapacityController:
         for row in connection.execute(
             "SELECT i.location_id, i.quantity, p.weight, p.length, p.width, p.height "
             "FROM inventory i LEFT JOIN products p ON p.product_id = i.product_id"
+            + (" WHERE i.location_id IN (SELECT location_id FROM scope_locations) OR NOT EXISTS (SELECT 1 FROM locations WHERE location_id=i.location_id)" if scoped else "")
         ):
             if row["location_id"] not in known_ids:
                 unclassified = True
@@ -84,7 +92,7 @@ class CapacityController:
                     reasons["volume"].append("invalid_measurements")
                 else:
                     used["volume"] += quantity * dimensions[0] * dimensions[1] * dimensions[2] / 1_000_000
-            rack = {"location_id": location_id, "location_code": location["location_code"]}
+            rack = {"location_id": location_id, "location_code": dict(location).get('display_code',location['location_code'])}
             for name in self.METRICS:
                 capacity = self.positive_decimal(location["max_" + name])
                 total = None if reasons[name] else used[name]

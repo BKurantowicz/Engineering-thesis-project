@@ -147,7 +147,7 @@ class SettingsView(QWidget):
         self.path_import, _ = self._add_path_row(grid, 3, self.translator.t("path_import", "Default Import Folder:"))
         self.path_templates, _ = self._add_path_row(grid, 4, self.translator.t("path_templates", "Document Templates Folder:"))
         
-        self.database_path,_ = self._add_path_row(grid,5,self.translator.t("database_file"),True)
+        self.database_path,self.database_browse = self._add_path_row(grid,5,self.translator.t("database_file"),True)
         self.carrier_path,_ = self._add_path_row(grid,6,self.translator.t("carrier_folder"))
         self.template_choices = {}
         for row, kind in enumerate(("email", "pick", "invoice"), 7):
@@ -305,7 +305,7 @@ class SettingsView(QWidget):
         
         # System paths (mapped to your specific JSON keys)
         paths = config.get("paths", {})
-        self.database_path.setText(paths.get("database","warehouse.db"))
+        self.database_path.setText(paths.get("database","application.db"))
         self.carrier_path.setText(paths.get("exports_carriers",""))
         self.path_backup.setText(paths.get("backups", ""))
         self.path_export_pick.setText(paths.get("exports_pick_lists", "")) 
@@ -339,6 +339,14 @@ class SettingsView(QWidget):
         self.smtp_options = dict(smtp)
         self.smtp_key.setPlaceholderText("••••••" if smtp.get("credential_id") else self.translator.t("smtp_secret_hint"))
         self.smtp_key.clear()
+        from controllers import auth_controller as auth
+        if auth.runtime and auth.runtime.unified:
+            editable = auth.can_admin()
+            for widget in (self.comp_name,self.comp_nip,self.comp_street,self.comp_postal_code,self.comp_city,
+                           self.comp_email,self.comp_phone,self.bank,self.bdo,self.smtp_key,self.smtp_button):
+                widget.setEnabled(editable)
+            self.database_path.setReadOnly(True)
+            self.database_browse.setEnabled(False)
         
         # Localization and appearance
         loc = config.get("localization", {})
@@ -384,8 +392,14 @@ class SettingsView(QWidget):
             return
             
         from PySide6.QtWidgets import QMessageBox
-            
-        config = self.controller.get_config()
+        from controllers import auth_controller as auth
+        try:
+            config = self.controller.get_config()
+        except ValueError as error:
+            QMessageBox.warning(self,self.translator.t('operation_failed'),self.translator.t(str(error)))
+            return
+        from copy import deepcopy
+        shop_settings = {key:deepcopy(config.get(key,{})) for key in ('company','company_info','email_smtp')}
         
         # Save paths
         if "paths" not in config: config["paths"] = {}
@@ -427,7 +441,7 @@ class SettingsView(QWidget):
                 QMessageBox.warning(self,self.translator.t("smtp_account"),self.translator.t("smtp_setup"))
                 return
             config["email_smtp"].pop("smtp_key",None)
-        config["paths"]["database"]=self.database_path.text().strip() or "warehouse.db"
+        config["paths"]["database"]=self.database_path.text().strip() or "application.db"
         for section,key,widget in (("paths","exports_carriers",self.carrier_path),("company_info","bank",self.bank),("company_info","bdo",self.bdo)):
             if widget.text() or key in config[section]:
                 config[section][key]=widget.text()
@@ -448,7 +462,13 @@ class SettingsView(QWidget):
         config["system"]["notifications"]["show_toasts"] = self.chk_toasts.isChecked()
         config["system"]["notifications"]["play_sound"] = self.chk_sounds.isChecked()
         
-        success = self.controller.save_config(config)
+        if auth.runtime and auth.runtime.unified and not auth.can_admin():
+            config.update(shop_settings)
+        try:
+            success = self.controller.save_config(config)
+        except (ValueError,OSError) as error:
+            QMessageBox.warning(self,self.translator.t('operation_failed'),self.translator.t(str(error),self.translator.t('operation_failed')))
+            return
         
         if success:
             from PySide6.QtWidgets import QApplication

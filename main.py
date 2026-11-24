@@ -41,8 +41,8 @@ class MainWindow(QMainWindow):
         # Safely retrieve values with fallbacks to prevent missing key errors
         self.lang_code = self.config.get("localization", {}).get("language", "en")
         
-        # Safely retrieve database path; fallback to 'warehouse.db' if missing
-        self.db_path = self.config.get("paths", {}).get("database", "warehouse.db")
+        # Safely retrieve database path; fallback to 'application.db' if missing
+        self.db_path = self.config.get("paths", {}).get("database", "application.db")
         self.db = DatabaseManager(self.db_path)
 
         self.setWindowTitle(self.t("app_title", "WMS System"))
@@ -263,7 +263,7 @@ def load_config():
         # Return a safe fallback structure if the file is missing
         return {
             "localization": {"language": "en"},
-            "paths": {"database": "warehouse.db"}
+            "paths": {"database": "application.db"}
         }
         
     with open('config.json', 'r', encoding='utf-8') as f:
@@ -271,6 +271,7 @@ def load_config():
 
 
 if __name__ == "__main__":
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
     app = QApplication(sys.argv)
     
     config = load_config()

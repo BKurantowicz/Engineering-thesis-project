@@ -176,7 +176,7 @@ class OrderAccordionItem(QWidget):
 
 
 class OrdersView(QWidget):
-    def __init__(self, translator_obj, db_path="warehouse.db"):
+    def __init__(self, translator_obj, db_path="application.db"):
         super().__init__()
         # Use the global translator object passed from MainWindow instead of creating a new one
         self.translator = translator_obj
