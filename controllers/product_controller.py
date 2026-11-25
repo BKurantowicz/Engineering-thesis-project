@@ -166,4 +166,6 @@ class ProductController:
             for table in ("order_items", "inventory", "inventory_transactions", "pick_allocations", "shortage_events"):
                 if connection.execute(f"SELECT 1 FROM {table} WHERE product_id = ? LIMIT 1", (product_id,)).fetchone():
                     raise WarehouseError("product_referenced")
+            if is_unified(connection):
+                connection.execute("DELETE FROM shop_prices WHERE product_id = ?", (product_id,))
             connection.execute("DELETE FROM products WHERE product_id = ?", (product_id,))
