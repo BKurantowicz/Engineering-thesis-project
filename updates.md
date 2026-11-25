@@ -9,6 +9,16 @@ versions. Commits and merges alone do not establish that a release occurred.
 
 ## Unreleased
 
+### 2026-11-25 - Delete unused products with shop prices (R-FR-01)
+
+- Remove an unused product's price overrides in every shop within the existing
+  deletion transaction, after checking stock, order and history references.
+  This fixes the foreign-key error after editing a catalogue-only product.
+- Preserve all prices and business data on a rejected deletion or storage failure.
+  Existing Admin authorization and business-reference protection remain enforced.
+- Add unified-database regression coverage for multiple shop prices, referenced
+  products and an injected failure after price cleanup; clarify deletion in README.
+
 ### 2026-11-19 - Unified shops and shared physical warehouses (US-FR-01..08 v6)
 
 - Replace runtime warehouse-file switching with shop and warehouse record contexts

@@ -352,8 +352,11 @@ or over-capacity edit.
 **Deactivate/Reactivate** persists state without losing stock or history.
 **Delete product** rejects references from order items, inventory, movements,
 picking allocations, or shortage history; database triggers also protect these
-references. Successful stock entry and picking refresh catalogue quantities and
-Dashboard capacity. Inactive records remain searchable for maintenance.
+references. An unused product can be deleted after edits; its price overrides in
+all shops are removed in the same transaction. A rejected or failed deletion
+preserves the product and every shop price. Successful stock entry and picking
+refresh catalogue quantities and Dashboard capacity. Inactive records remain
+searchable for maintenance.
 
 ## Customer Details
 
